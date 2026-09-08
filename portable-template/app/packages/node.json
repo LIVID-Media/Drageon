@@ -1,0 +1,22 @@
+{
+  "id": "node",
+  "displayName": "Node.js",
+  "description": "Kostenlose, quelloffene, plattform\u00FCbergreifende JavaScript-Laufzeitumgebung.",
+  "category": "developmentTool",
+  "bundled": true,
+  "downloadPageUrl": "https://nodejs.org/en/download",
+  "installDirectory": "node",
+  "addToPath": true,
+  "pathDirectories": [],
+  "releases": [
+    {
+      "version": "24.20.0",
+      "url": "https://nodejs.org/dist/v24.20.0/node-v24.20.0-win-x64.zip",
+      "sha256": null,
+      "archiveType": "zip",
+      "fileName": null,
+      "stripPrefix": null,
+      "launchPath": null
+    }
+  ]
+}

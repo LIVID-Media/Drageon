@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <OutputType>WinExe</OutputType>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <AssemblyName>Drageon</AssemblyName>
+    <RootNamespace>Drageon.App</RootNamespace>
+    <Version>1.0.0</Version>
+    <ApplicationIcon>Assets\Brand\drageon.ico</ApplicationIcon>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <PublishTrimmed>false</PublishTrimmed>
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+    <DebugType Condition="'$(Configuration)' == 'Release'">none</DebugType>
+    <DebugSymbols Condition="'$(Configuration)' == 'Release'">false</DebugSymbols>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Drageon.Core\Drageon.Core.csproj" />
+    <ProjectReference Include="..\Drageon.Infrastructure\Drageon.Infrastructure.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Assets\Brand\drageon-icon.webp" />
+    <None Include="Assets\Brand\drageon-logo.webp" />
+    <Resource Include="Assets\Brand\drageon-icon.png" />
+    <Resource Include="Assets\Brand\drageon-logo.png" />
+    <Resource Include="Assets\Brand\drageon.ico" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="..\..\portable-template\**\*" Exclude="..\..\portable-template\**\.gitkeep">
+      <Link>%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+    </Content>
+  </ItemGroup>
+  <Target Name="CreatePortableDirectories" AfterTargets="Publish">
+    <MakeDir Directories="$(PublishDir)www;$(PublishDir)data\mariadb;$(PublishDir)data\mysql;$(PublishDir)data\mail;$(PublishDir)data\cron;$(PublishDir)bin\apache;$(PublishDir)bin\nginx;$(PublishDir)app\config\vhosts;$(PublishDir)app\var\generated\nginx;$(PublishDir)app\var\logs\nginx;$(PublishDir)bin\php;$(PublishDir)bin\mariadb;$(PublishDir)bin\mysql;$(PublishDir)bin\phpmyadmin;$(PublishDir)bin\curl;$(PublishDir)app\config\phpmyadmin;$(PublishDir)app\var\generated\apache;$(PublishDir)app\var\generated\php;$(PublishDir)app\var\generated\phpmyadmin;$(PublishDir)app\var\generated\mariadb;$(PublishDir)app\var\generated\mysql;$(PublishDir)app\var\logs\app;$(PublishDir)app\var\logs\apache;$(PublishDir)app\var\logs\php;$(PublishDir)app\var\logs\mariadb;$(PublishDir)app\var\logs\mysql;$(PublishDir)app\var\logs\mail;$(PublishDir)app\var\logs\cron;$(PublishDir)app\var\tmp\.opcache;$(PublishDir)app\var\tmp\phpmyadmin;$(PublishDir)app\var\tmp\downloads;$(PublishDir)app\var\tmp\extract" />
+  </Target>
+</Project>
+

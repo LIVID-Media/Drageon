@@ -1,0 +1,138 @@
+<UserControl x:Class="Drageon.App.Views.DashboardView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:Drageon.App">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel>
+            <TextBlock Text="{local:Loc Key=dashboard.title}" Style="{StaticResource PageTitle}" />
+            <TextBlock Text="{local:Loc Key=dashboard.subtitle}" Style="{StaticResource PageSubtitle}" />
+
+            <Border Style="{StaticResource Card}" Margin="0,0,0,18">
+                <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Text="{local:Loc Key=dashboard.serverControl}" Style="{StaticResource SectionTitle}" />
+                        <TextBlock Text="{Binding Message}" Foreground="{StaticResource MutedTextBrush}" Margin="0,5,0,0" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal">
+                        <Button Command="{Binding StopAllCommand}" Style="{StaticResource DashboardStopAllButton}"
+                                Visibility="{Binding StopAllVisibility}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE73B;" FontFamily="Segoe Fluent Icons" Margin="0,3,8,0" />
+                                <TextBlock Text="{local:Loc Key=action.stopAll}" />
+                            </StackPanel>
+                        </Button>
+                        <Button Command="{Binding StartAllCommand}" Style="{StaticResource DashboardStartAllButton}"
+                                Visibility="{Binding StartAllVisibility}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xF5B0;" FontFamily="Segoe Fluent Icons" Margin="0,3,8,0" />
+                                <TextBlock Text="{local:Loc Key=action.startAll}" />
+                            </StackPanel>
+                        </Button>
+                        <TextBlock Text="{local:Loc Key=dashboard.serverControl.starting}"
+                                   Visibility="{Binding StartingServersVisibility}"
+                                   Foreground="{StaticResource MutedTextBrush}" VerticalAlignment="Center" />
+                        <TextBlock Text="{local:Loc Key=dashboard.serverControl.stopping}"
+                                   Visibility="{Binding StoppingServersVisibility}"
+                                   Foreground="{StaticResource MutedTextBrush}" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <ItemsControl ItemsSource="{Binding Components}" Margin="0,0,0,18">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate><UniformGrid Columns="3" /></ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Style="{StaticResource Card}" Margin="0,0,12,0">
+                            <StackPanel>
+                                <Grid>
+                                    <TextBlock Text="{Binding Name}" Style="{StaticResource SubsectionTitle}" />
+                                    <Border HorizontalAlignment="Right" Style="{StaticResource ComponentStatusBadge}">
+                                        <TextBlock Text="{Binding State}" Style="{StaticResource ComponentStatusText}" />
+                                    </Border>
+                                </Grid>
+                                <TextBlock Text="{Binding Description}" Foreground="{StaticResource MutedTextBrush}" Margin="0,12,0,0" />
+                                <Grid Margin="0,5,0,0">
+                                    <TextBlock Text="{Binding VersionText}" Foreground="{StaticResource MutedTextBrush}" FontSize="11"
+                                               VerticalAlignment="Center" Margin="0,0,80,0" />
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,-15,0,0"
+                                                Visibility="{Binding IsRuntimeComponent, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                        <Button Content="&#xE73B;" ToolTip="{local:Loc Key=dashboard.component.stop}"
+                                                Command="{Binding DataContext.StopComponentCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                CommandParameter="{Binding}" Style="{StaticResource IconButton}" Margin="0,0,8,0" />
+                                        <Button Content="&#xE72C;" ToolTip="{local:Loc Key=dashboard.component.restart}"
+                                                Command="{Binding DataContext.RestartComponentCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                CommandParameter="{Binding}" Style="{StaticResource IconButton}" />
+                                    </StackPanel>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <Border Style="{StaticResource Card}" Margin="0,0,0,18">
+                <StackPanel>
+                    <Grid Margin="0,0,0,10">
+                        <TextBlock Text="{local:Loc Key=dashboard.projects.title}" Style="{StaticResource SectionTitle}" VerticalAlignment="Center" />
+                        <Button Content="{local:Loc Key=dashboard.projects.all}" HorizontalAlignment="Right"
+                                Style="{StaticResource SecondaryButton}"
+                                Command="{Binding DataContext.NavigateCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                CommandParameter="projects" />
+                    </Grid>
+                    <ScrollViewer MaxHeight="210" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" PanningMode="VerticalOnly">
+                        <ItemsControl ItemsSource="{Binding FavoriteProjects}" Margin="0,0,6,0">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Margin="0,4">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="1.1*" />
+                                            <ColumnDefinition Width="2*" />
+                                            <ColumnDefinition Width="1.1*" />
+                                            <ColumnDefinition Width="42" />
+                                            <ColumnDefinition Width="42" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="0,0,10,0" />
+                                        <TextBlock Grid.Column="1" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="0,0,10,0">
+                                            <Hyperlink Command="{Binding DataContext.OpenProjectCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                       CommandParameter="{Binding}"><Run Text="{Binding Url, Mode=OneWay}" /></Hyperlink>
+                                        </TextBlock>
+                                        <TextBlock Grid.Column="2" Text="{Binding Type}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="0,0,10,0" />
+                                        <Button Grid.Column="3" Content="&#xE838;" ToolTip="{local:Loc Key=projects.action.openFolder}"
+                                                Command="{Binding DataContext.OpenProjectFolderCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                CommandParameter="{Binding}" Style="{StaticResource IconButton}" />
+                                        <Button Grid.Column="4" Content="&#xE756;" ToolTip="{local:Loc Key=projects.action.openPowerShell}"
+                                                Command="{Binding DataContext.OpenPowerShellCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                CommandParameter="{Binding}" Style="{StaticResource IconButton}" Margin="0,0,6,0" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                    <TextBlock Text="{local:Loc Key=dashboard.projects.empty}" Style="{StaticResource MutedText}"
+                               Visibility="{Binding EmptyFavoriteProjectsVisibility}" TextWrapping="Wrap" />
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Text="{local:Loc Key=dashboard.quick.title}" Style="{StaticResource SectionTitle}" Margin="0,6,0,12" />
+                    <WrapPanel>
+                        <Button Content="{local:Loc Key=dashboard.quick.localhost}" Command="{Binding OpenLocalhostCommand}" Margin="0,0,10,8"
+                                Visibility="{Binding ShowQuickLocalhost, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                        <Button Content="{local:Loc Key=dashboard.quick.phpmyadmin}" Command="{Binding OpenPhpMyAdminCommand}" Margin="0,0,10,8"
+                                Visibility="{Binding IsPhpMyAdminVisible, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                        <Button Content="{local:Loc Key=dashboard.quick.powershell}" Command="{Binding OpenPowerShellCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,10,8"
+                                Visibility="{Binding ShowQuickPowerShell, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                        <Button Content="{local:Loc Key=dashboard.quick.www}" Command="{Binding OpenWwwCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,10,8"
+                                Visibility="{Binding ShowQuickWww, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                        <Button Content="{local:Loc Key=dashboard.quick.app}" Command="{Binding OpenRootCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,0,8"
+                                Visibility="{Binding ShowQuickAppRoot, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                    </WrapPanel>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

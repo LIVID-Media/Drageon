@@ -1,0 +1,23 @@
+{
+  "id": "mysql",
+  "displayName": "MySQL",
+  "description": "Speichert und verwaltet lokale Projektdatenbanken mit MySQL.",
+  "category": "database",
+  "bundled": true,
+  "exclusiveGroup": "database",
+  "downloadPageUrl": "https://dev.mysql.com/downloads/mysql/",
+  "installDirectory": "mysql",
+  "addToPath": false,
+  "pathDirectories": [],
+  "releases": [
+    {
+      "version": "8.4.11",
+      "url": "https://cdn.mysql.com/Downloads/MySQL-8.4/mysql-8.4.11-winx64.zip",
+      "sha256": null,
+      "archiveType": "zip",
+      "fileName": null,
+      "stripPrefix": null,
+      "launchPath": null
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+.vs/
+.idea/
+**/bin/
+**/obj/
+publish/
+work/
+*.user
+*.suo
+Thumbs.db
+.DS_Store
+README-LOCAL.md
+
+# Die portable Vorlage gehört zum Projekt; ihre bin-Verzeichnisse sind keine Build-Ausgaben.
+!portable-template/bin/
+!portable-template/bin/**

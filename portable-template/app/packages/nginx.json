@@ -1,0 +1,20 @@
+{
+  "id": "nginx",
+  "displayName": "Nginx Webserver",
+  "description": "Optionaler Webserver mit PHP über FastCGI.",
+  "category": "webserver",
+  "bundled": true,
+  "downloadPageUrl": "https://nginx.org/en/download.html",
+  "installDirectory": "nginx",
+  "addToPath": false,
+  "pathDirectories": [],
+  "releases": [
+    {
+      "version": "1.31.5",
+      "url": "https://nginx.org/download/nginx-1.31.5.zip",
+      "archiveType": "zip",
+      "stripPrefix": "nginx-1.31.5",
+      "sha256": "00ad32a2bf66cee0ec8eb194347e8e79917f47017ccd3ad4bebf5574fabe002c"
+    }
+  ]
+}

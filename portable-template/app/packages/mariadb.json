@@ -1,0 +1,23 @@
+{
+  "id": "mariadb",
+  "displayName": "MariaDB",
+  "description": "Speichert und verwaltet lokale Projektdatenbanken mit MariaDB.",
+  "category": "database",
+  "bundled": true,
+  "exclusiveGroup": "database",
+  "downloadPageUrl": "https://mariadb.org/download/",
+  "installDirectory": "mariadb",
+  "addToPath": false,
+  "pathDirectories": [],
+  "releases": [
+    {
+      "version": "12.3.3",
+      "url": "https://dlm.mariadb.com/4805476/MariaDB/mariadb-12.3.3/winx64-packages/mariadb-12.3.3-winx64.zip",
+      "sha256": "4b5706b47148b47c8f36963c8352d1ddee37a1287b4690428f631a74b09b85a0",
+      "archiveType": "zip",
+      "fileName": null,
+      "stripPrefix": null,
+      "launchPath": null
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+<UserControl x:Class="Drageon.App.Views.LogsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:Drageon.App">
+    <Grid>
+        <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+        <Grid>
+            <StackPanel>
+                <TextBlock Text="{local:Loc Key=logs.title}" Style="{StaticResource PageTitle}" />
+                <TextBlock Text="{local:Loc Key=logs.subtitle}" Style="{StaticResource PageSubtitle}" />
+            </StackPanel>
+        </Grid>
+        <Grid Grid.Row="1" Margin="0,0,0,14">
+            <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+            <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="200" /><ColumnDefinition Width="200" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                <ComboBox ItemsSource="{Binding ComponentOptions}" SelectedItem="{Binding SelectedComponent}" DisplayMemberPath="DisplayName" Style="{StaticResource CompactComboBox}" />
+                <ComboBox Grid.Column="1" ItemsSource="{Binding SeverityOptions}" SelectedItem="{Binding SelectedSeverity}" DisplayMemberPath="DisplayName" Style="{StaticResource CompactComboBox}" Margin="10,0,0,0" />
+                <TextBox Grid.Column="2" Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource CompactTextBox}" Margin="10,0,0,0" />
+            </Grid>
+        </Grid>
+        <Border Grid.Row="2" Style="{StaticResource Card}" Background="{StaticResource LogBackgroundBrush}" Padding="0">
+            <ListBox ItemsSource="{Binding Entries}" Background="Transparent" BorderThickness="0" Padding="10"
+                     ScrollViewer.HorizontalScrollBarVisibility="Auto" ScrollViewer.VerticalScrollBarVisibility="Auto">
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <TextBox Text="{Binding Text, Mode=OneWay}" IsReadOnly="True" Style="{StaticResource LogEntryTextBox}" />
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+        </Border>
+        <Grid Grid.Row="3" Margin="0,10,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="{Binding Status}" Foreground="{StaticResource MutedTextBrush}" VerticalAlignment="Center" />
+            <WrapPanel HorizontalAlignment="Right">
+                <Button Content="&#xE838;" ToolTip="{local:Loc Key=logs.openFolder}" Command="{Binding OpenLogFolderCommand}" Style="{StaticResource FooterIconButton}" Margin="0,0,8,0" />
+                <Button Content="&#xE8C8;" ToolTip="{local:Loc Key=logs.copy}" Command="{Binding CopyVisibleLogsCommand}" Style="{StaticResource FooterIconButton}" Margin="0,0,8,0" />
+                <Button Content="&#xE894;" ToolTip="{local:Loc Key=logs.clearView}" Command="{Binding ClearCommand}" Style="{StaticResource FooterIconButton}" Margin="0,0,8,0" />
+                <Button Content="&#xE74D;" ToolTip="{local:Loc Key=logs.deleteFiles}" Command="{Binding DeleteLogFilesCommand}" Style="{StaticResource FooterIconButton}" />
+            </WrapPanel>
+        </Grid>
+    </Grid>
+</UserControl>

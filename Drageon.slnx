@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="src/Drageon.Core/Drageon.Core.csproj" />
+  <Project Path="src/Drageon.Infrastructure/Drageon.Infrastructure.csproj" />
+  <Project Path="src/Drageon.App/Drageon.App.csproj" />
+</Solution>

@@ -1,0 +1,96 @@
+<UserControl x:Class="Drageon.App.Views.SettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:Drageon.App">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+                <TextBlock Text="{local:Loc Key=settings.title}" Style="{StaticResource PageTitle}" />
+                <TextBlock Text="{local:Loc Key=settings.subtitle}" Style="{StaticResource PageSubtitle}" />
+                <Border Style="{StaticResource Card}" Margin="0,0,0,14">
+                    <StackPanel>
+                        <TextBlock Text="{local:Loc Key=settings.webServer}" Style="{StaticResource SubsectionTitle}" />
+                        <ComboBox ItemsSource="{Binding WebServers}" DisplayMemberPath="Value" SelectedValuePath="Key" SelectedValue="{Binding WebServer}" Style="{StaticResource CompactComboBox}" Margin="0,8,0,12" />
+                        <StackPanel Visibility="{Binding ShowFastCgiSettings, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <TextBlock Text="{local:Loc Key=settings.fastCgiPort}" Foreground="{StaticResource MutedTextBrush}" />
+                            <TextBox Text="{Binding FastCgiPort, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource CompactTextBox}" Margin="0,8,0,12" />
+                        </StackPanel>
+                        <TextBlock Text="{local:Loc Key=settings.webServerHint}" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>            <Border Style="{StaticResource Card}">
+                    <Grid>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="220" /><ColumnDefinition /></Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Text="{local:Loc Key=settings.appRoot}" Foreground="{StaticResource MutedTextBrush}" Margin="0,9,18,15" />
+                        <Border Grid.Column="1" Style="{StaticResource ReadOnlyField}" Margin="0,0,0,12">
+                            <TextBlock Text="{Binding AppRoot}" Foreground="{StaticResource MutedTextBrush}" VerticalAlignment="Center"
+                                       TextTrimming="CharacterEllipsis" />
+                        </Border>
+                        <TextBlock Grid.Row="1" Text="{local:Loc Key=settings.language}" Foreground="{StaticResource MutedTextBrush}" Margin="0,9,18,15" />
+                        <ComboBox Grid.Row="1" Grid.Column="1" ItemsSource="{Binding Languages}" SelectedItem="{Binding Language}" Style="{StaticResource CompactComboBox}" Margin="0,0,0,12" />
+                        <TextBlock Grid.Row="2" Text="{local:Loc Key=settings.httpPort}" Foreground="{StaticResource MutedTextBrush}" Margin="0,9,18,15" />
+                        <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding HttpPort, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource CompactTextBox}" Margin="0,0,0,12" />
+                        <TextBlock Grid.Row="3" Text="{local:Loc Key=settings.httpsPort}" Foreground="{StaticResource MutedTextBrush}" Margin="0,9,18,15" />
+                        <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding HttpsPort, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource CompactTextBox}" Margin="0,0,0,12" />
+                        <TextBlock Grid.Row="4" Text="{local:Loc Key=settings.smtpPort}" Foreground="{StaticResource MutedTextBrush}" Margin="0,9,18,15" />
+                        <TextBox Grid.Row="4" Grid.Column="1" Text="{Binding SmtpPort, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource CompactTextBox}" Margin="0,0,0,12" />
+                        <CheckBox Grid.Row="5" Grid.ColumnSpan="2" Content="{local:Loc Key=settings.autoStart}"
+                                  IsChecked="{Binding StartComponentsWithApp}" Margin="0,8" />
+                        <CheckBox Grid.Row="6" Grid.ColumnSpan="2" Content="{local:Loc Key=settings.closeToTray}"
+                                  IsChecked="{Binding CloseToTrayOnWindowClose}" Margin="0,8" />
+                        <CheckBox Grid.Row="7" Grid.ColumnSpan="2" Content="{local:Loc Key=settings.catchUp}"
+                                  IsChecked="{Binding RunMissedJobsOnStartup}" Margin="0,8" />
+                        <StackPanel Grid.Row="8" Grid.ColumnSpan="2" Margin="0,20,0,0">
+                            <TextBlock Text="{local:Loc Key=settings.mailNotifications.title}" Style="{StaticResource SubsectionTitle}" Margin="0,0,0,8" />
+                            <TextBlock Text="{local:Loc Key=settings.mailNotifications.text}"
+                                       Foreground="{StaticResource MutedTextBrush}" Margin="0,0,0,8" />
+                            <WrapPanel>
+                                <CheckBox Content="{local:Loc Key=settings.mailNotifications.show}"
+                                          IsChecked="{Binding NotifyOnMailReceived}" Margin="0,5,22,5" />
+                                <CheckBox Content="{local:Loc Key=settings.mailNotifications.sound}"
+                                          IsChecked="{Binding PlaySoundOnMailReceived}" Margin="0,5,0,5" />
+                            </WrapPanel>
+                        </StackPanel>
+                        <StackPanel Grid.Row="9" Grid.ColumnSpan="2" Margin="0,20,0,0">
+                            <TextBlock Text="{local:Loc Key=settings.cronNotifications.title}" Style="{StaticResource SubsectionTitle}" Margin="0,0,0,8" />
+                            <TextBlock Text="{local:Loc Key=settings.cronNotifications.text}" Foreground="{StaticResource MutedTextBrush}" Margin="0,0,0,8" />
+                            <WrapPanel>
+                                <CheckBox Content="{local:Loc Key=settings.cronNotifications.show}" IsChecked="{Binding NotifyOnCronJobFinished}" Margin="0,5,22,5" />
+                                <CheckBox Content="{local:Loc Key=settings.cronNotifications.sound}" IsChecked="{Binding PlaySoundOnCronJobFinished}" Margin="0,5,0,5" />
+                            </WrapPanel>
+                        </StackPanel>
+                        <StackPanel Grid.Row="10" Grid.ColumnSpan="2" Margin="0,20,0,0">
+                            <TextBlock Text="{local:Loc Key=settings.quick.title}" Style="{StaticResource SubsectionTitle}" Margin="0,0,0,8" />
+                            <TextBlock Text="{local:Loc Key=settings.quick.text}"
+                                       Foreground="{StaticResource MutedTextBrush}" Margin="0,0,0,8" />
+                        </StackPanel>
+                        <WrapPanel Grid.Row="11" Grid.ColumnSpan="2">
+                            <CheckBox Content="localhost" IsChecked="{Binding ShowQuickLocalhost}" Margin="0,5,22,5" />
+                            <CheckBox Content="phpMyAdmin" IsChecked="{Binding ShowQuickPhpMyAdmin}" Margin="0,5,22,5" />
+                            <CheckBox Content="PowerShell" IsChecked="{Binding ShowQuickPowerShell}" Margin="0,5,22,5" />
+                            <CheckBox Content="{local:Loc Key=settings.quick.www}" IsChecked="{Binding ShowQuickWww}" Margin="0,5,22,5" />
+                            <CheckBox Content="{local:Loc Key=settings.quick.app}" IsChecked="{Binding ShowQuickAppRoot}" Margin="0,5,0,5" />
+                        </WrapPanel>
+                    </Grid>
+                </Border>
+                <TextBlock Text="{local:Loc Key=settings.portHint}"
+                           Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" Margin="0,14,0,0" />
+            </StackPanel>
+        </ScrollViewer>
+        <Grid Grid.Row="1" Margin="0,14,0,0">
+            <TextBlock Text="{Binding Status}" Foreground="{StaticResource MutedTextBrush}"
+                       VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,130,0" />
+            <Button Content="&#xE74E;" ToolTip="{local:Loc Key=settings.save}" Command="{Binding SaveCommand}"
+                    Style="{StaticResource PrimaryFooterIconButton}" HorizontalAlignment="Right" VerticalAlignment="Center" />
+        </Grid>
+    </Grid>
+</UserControl>

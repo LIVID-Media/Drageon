@@ -1,0 +1,14 @@
+<UserControl x:Class="Drageon.App.Views.NginxSettingsView" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:local="clr-namespace:Drageon.App">
+ <Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+  <StackPanel><TextBlock Text="{local:Loc Key=nginx.title}" Style="{StaticResource PageTitle}"/><StackPanel Orientation="Horizontal" Margin="0,0,0,24"><TextBlock Text="{local:Loc Key=nginx.subtitle}" Foreground="{StaticResource MutedTextBrush}"/><TextBlock Text="{Binding VersionLabel}" Foreground="{StaticResource AccentSecondaryBrush}" Margin="8,0,0,0" FontWeight="SemiBold"/></StackPanel></StackPanel>
+  <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"><StackPanel>
+   <Border Style="{StaticResource Card}"><Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="24"/><ColumnDefinition/></Grid.ColumnDefinitions>
+    <StackPanel><TextBlock Text="{local:Loc Key=nginx.workers}" Margin="0,0,0,5"/><TextBox Text="{Binding WorkerProcesses}" Style="{StaticResource CompactTextBox}"/></StackPanel>
+    <StackPanel Grid.Column="2"><TextBlock Text="{local:Loc Key=nginx.connections}" Margin="0,0,0,5"/><TextBox Text="{Binding WorkerConnections}" Style="{StaticResource CompactTextBox}"/></StackPanel>
+    <StackPanel Grid.ColumnSpan="3" Margin="0,76,0,0"><TextBlock Text="{local:Loc Key=nginx.logLevel}" Margin="0,0,0,5"/><ComboBox ItemsSource="{Binding LogLevels}" SelectedItem="{Binding LogLevel}" Style="{StaticResource CompactComboBox}"/></StackPanel>
+   </Grid></Border>
+   <TextBlock Text="{local:Loc Key=nginx.custom}" Margin="0,18,0,6"/><TextBox Text="{Binding CustomConfiguration}" AcceptsReturn="True" Height="180" VerticalScrollBarVisibility="Auto" Style="{StaticResource CodeEditorTextBox}"/>
+  </StackPanel></ScrollViewer>
+  <Grid Grid.Row="2" Margin="0,16,0,0"><TextBlock Text="{Binding Status}" Foreground="{StaticResource MutedTextBrush}"/><StackPanel Orientation="Horizontal" HorizontalAlignment="Right"><Button Content="&#xE74E;" ToolTip="{local:Loc Key=common.saveOnly}" Command="{Binding SaveCommand}" Style="{StaticResource FooterIconButton}" Margin="0,0,8,0"/><Button ToolTip="{local:Loc Key=common.saveRestart}" Command="{Binding SaveAndRestartCommand}" Style="{StaticResource PrimaryFooterIconButton}" Width="58"><StackPanel Orientation="Horizontal"><TextBlock Text="&#xE74E;" FontFamily="Segoe Fluent Icons"/><TextBlock Text="&#xE72C;" FontFamily="Segoe Fluent Icons" Margin="6,0,0,0"/></StackPanel></Button></StackPanel></Grid>
+ </Grid>
+</UserControl>

@@ -1,0 +1,31 @@
+{
+  "id": "phpmyadmin",
+  "displayName": "phpMyAdmin",
+  "description": "Verwaltet MariaDB- und MySQL-Datenbanken im Browser.",
+  "category": "php",
+  "bundled": true,
+  "downloadPageUrl": "https://www.phpmyadmin.net/downloads/",
+  "installDirectory": "phpmyadmin",
+  "addToPath": false,
+  "pathDirectories": [],
+  "releases": [
+    {
+      "version": "6.0\u002Bsnapshot",
+      "url": "https://files.phpmyadmin.net/snapshots/phpMyAdmin-6.0\u002Bsnapshot-all-languages.zip",
+      "sha256": "c82f7ad1d850436822648c2f620fd3d406ea3c060d6abeceb28d074d7c1b068b",
+      "archiveType": "zip",
+      "fileName": null,
+      "stripPrefix": null,
+      "launchPath": "/phpmyadmin/public/"
+    },
+    {
+      "version": "5.2.3",
+      "url": "https://files.phpmyadmin.net/phpMyAdmin/5.2.3/phpMyAdmin-5.2.3-all-languages.zip",
+      "sha256": "2d2e13c735366d318425c78e4ee2cc8fc648d77faba3ddea2cd516e43885733f",
+      "archiveType": "zip",
+      "fileName": null,
+      "stripPrefix": null,
+      "launchPath": "/phpmyadmin/"
+    }
+  ]
+}

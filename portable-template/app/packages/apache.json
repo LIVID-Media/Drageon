@@ -1,0 +1,22 @@
+{
+  "id": "apache",
+  "displayName": "Apache Server",
+  "description": "Stellt den lokalen Webserver f\u00FCr Projekte und Virtual Hosts bereit.",
+  "category": "webserver",
+  "bundled": true,
+  "downloadPageUrl": "https://www.apachelounge.com/download/",
+  "installDirectory": "apache",
+  "addToPath": false,
+  "pathDirectories": [],
+  "releases": [
+    {
+      "version": "2.4.68",
+      "url": "https://www.apachelounge.com/download/VS18/binaries/httpd-2.4.68-260617-Win64-VS18.zip",
+      "sha256": "eac38a9f8d21b6ba0817cd1576a3d291cc771afd3c6a210d120bdea6f4aa4aeb",
+      "archiveType": "zip",
+      "fileName": null,
+      "stripPrefix": "Apache24",
+      "launchPath": null
+    }
+  ]
+}

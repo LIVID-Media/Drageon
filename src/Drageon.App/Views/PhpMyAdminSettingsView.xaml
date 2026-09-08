@@ -1,0 +1,40 @@
+<UserControl x:Class="Drageon.App.Views.PhpMyAdminSettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:Drageon.App">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel>
+            <TextBlock Text="{local:Loc Key=phpmyadmin.title}" Style="{StaticResource PageTitle}" />
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,24">
+                <TextBlock Text="{local:Loc Key=phpmyadmin.subtitle}" Foreground="{StaticResource MutedTextBrush}" />
+                <TextBlock Text="{Binding VersionLabel}" Foreground="{StaticResource AccentSecondaryBrush}" Margin="8,0,0,0" FontWeight="SemiBold" />
+            </StackPanel>
+            <Border Style="{StaticResource Card}" Margin="0,0,0,14">
+                <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition Width="24" /><ColumnDefinition /></Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                    <StackPanel><TextBlock Text="{local:Loc Key=phpmyadmin.authType}" Margin="0,0,0,5" /><ComboBox ItemsSource="{Binding AuthTypes}" SelectedValuePath="Value" SelectedValue="{Binding AuthType}" Style="{StaticResource CompactComboBox}" /></StackPanel>
+                    <StackPanel Grid.Column="2"><TextBlock Text="{local:Loc Key=phpmyadmin.dbHost}" Margin="0,0,0,5" /><TextBox Text="{Binding DatabaseHost, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource CompactTextBox}" /></StackPanel>
+                    <StackPanel Grid.Row="1" Margin="0,16,0,0"><TextBlock Text="{local:Loc Key=phpmyadmin.dbPort}" Margin="0,0,0,5" /><TextBox Text="{Binding DatabasePort, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource CompactTextBox}" /></StackPanel>
+                    <StackPanel Grid.Row="1" Grid.Column="2" Margin="0,16,0,0"><TextBlock Text="{local:Loc Key=phpmyadmin.cookieValidity}" Margin="0,0,0,5" /><TextBox Text="{Binding LoginCookieValidity, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource CompactTextBox}" /></StackPanel>
+                    <StackPanel Grid.Row="2" Margin="0,16,0,0"><TextBlock Text="{local:Loc Key=phpmyadmin.maxRows}" Margin="0,0,0,5" /><TextBox Text="{Binding MaxRows, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource CompactTextBox}" /></StackPanel>
+                    <StackPanel Grid.Row="2" Grid.Column="2" Margin="0,16,0,0"><CheckBox Content="{local:Loc Key=phpmyadmin.allowNoPassword}" IsChecked="{Binding AllowNoPassword}" /><CheckBox Content="{local:Loc Key=phpmyadmin.showServerInfo}" IsChecked="{Binding ShowServerInfo}" /></StackPanel>
+                </Grid>
+            </Border>
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Text="{local:Loc Key=phpmyadmin.password.title}" Style="{StaticResource SubsectionTitle}" />
+                    <TextBlock Text="{local:Loc Key=phpmyadmin.password.text}" TextWrapping="Wrap" Foreground="{StaticResource MutedTextBrush}" Margin="0,7,0,0" />
+                </StackPanel>
+            </Border>
+            <TextBlock Text="{local:Loc Key=phpmyadmin.custom}" Margin="0,18,0,6" />
+            <TextBox Text="{Binding CustomConfiguration, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" Height="90"
+                     VerticalScrollBarVisibility="Auto" Style="{StaticResource CodeEditorTextBox}" />
+            <Grid Margin="0,16,0,0">
+                <TextBlock Text="{Binding Status}" Foreground="{StaticResource MutedTextBrush}" VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,220,0" />
+                <Button Content="&#xE74E;" ToolTip="{local:Loc Key=phpmyadmin.save}" Command="{Binding SaveCommand}"
+                        Style="{StaticResource PrimaryFooterIconButton}" HorizontalAlignment="Right" />
+            </Grid>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

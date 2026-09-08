@@ -1,0 +1,140 @@
+<UserControl x:Class="Drageon.App.Views.PackageManifestEditorView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:Drageon.App">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <StackPanel>
+            <TextBlock Text="{Binding Title}" Style="{StaticResource PageTitle}" />
+            <TextBlock Text="{local:Loc Key=packageEditor.subtitle}" Style="{StaticResource PageSubtitle}" />
+        </StackPanel>
+
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+            <StackPanel Margin="0,0,10,0">
+                <Border Style="{StaticResource Card}" Margin="0,0,0,14">
+                    <Grid>
+                        <Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition Width="22" /><ColumnDefinition /></Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+
+                        <StackPanel>
+                            <TextBlock Text="{local:Loc Key=packageEditor.id}" Margin="0,0,0,5" />
+                            <TextBox Text="{Binding Id, UpdateSourceTrigger=PropertyChanged}" IsReadOnly="{Binding IsIdReadOnly}" Style="{StaticResource PackageEditorTextBox}" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Text="{local:Loc Key=packageEditor.displayName}" Margin="0,0,0,5" />
+                            <TextBox Text="{Binding DisplayName, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource PackageEditorTextBox}" />
+                        </StackPanel>
+                        <StackPanel Grid.Row="1" Grid.ColumnSpan="3" Margin="0,14,0,0">
+                            <TextBlock Text="{local:Loc Key=packageEditor.description}" Margin="0,0,0,5" />
+                            <TextBox Text="{Binding Description, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource PackageEditorTextBox}" />
+                        </StackPanel>
+                        <StackPanel Grid.Row="2" Margin="0,14,0,0">
+                            <TextBlock Text="{local:Loc Key=packageEditor.category}" Margin="0,0,0,5" />
+                            <ComboBox ItemsSource="{Binding Categories}" SelectedValue="{Binding Category}"
+                                      SelectedValuePath="Value" DisplayMemberPath="DisplayName" Style="{StaticResource CompactComboBox}" />
+                        </StackPanel>
+                        <StackPanel Grid.Row="2" Grid.Column="2" Margin="0,14,0,0">
+                            <TextBlock Text="{local:Loc Key=packageEditor.exclusiveGroup}" Margin="0,0,0,5" />
+                            <TextBox Text="{Binding ExclusiveGroup, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource PackageEditorTextBox}" />
+                            <TextBlock Text="{local:Loc Key=packageEditor.exclusiveGroupHint}" Style="{StaticResource HintText}" Margin="0,4,0,0" TextWrapping="Wrap" />
+                        </StackPanel>
+                        <StackPanel Grid.Row="3" Margin="0,14,0,0">
+                            <TextBlock Text="{local:Loc Key=packageEditor.installDirectory}" Margin="0,0,0,5" />
+                            <TextBox Text="{Binding InstallDirectory, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource PackageEditorTextBox}" />
+                            <TextBlock Text="{local:Loc Key=packageEditor.installDirectoryHint}" Style="{StaticResource HintText}" Margin="0,4,0,0" />
+                        </StackPanel>
+                        <StackPanel Grid.Row="3" Grid.Column="2" Margin="0,14,0,0">
+                            <TextBlock Text="{local:Loc Key=packageEditor.downloadPageUrl}" Margin="0,0,0,5" />
+                            <TextBox Text="{Binding DownloadPageUrl, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource PackageEditorTextBox}" />
+                            <TextBlock Text="{local:Loc Key=packageEditor.downloadPageUrlHint}" Style="{StaticResource HintText}" Margin="0,4,0,0" />
+                        </StackPanel>
+                        <StackPanel Grid.Row="4" Grid.ColumnSpan="3" Margin="0,14,0,0">
+                            <CheckBox Content="{local:Loc Key=packageEditor.addToPath}" IsChecked="{Binding AddToPath}" />
+                            <TextBlock Text="{local:Loc Key=packageEditor.addToPathHint}" Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,4,0,0" />
+                            <StackPanel IsEnabled="{Binding AddToPath}" Margin="0,12,0,0">
+                                <TextBlock Text="{local:Loc Key=packageEditor.pathDirectories}" Margin="0,0,0,5" />
+                                <TextBox Text="{Binding PathDirectories, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource PackageEditorTextBox}" />
+                                <TextBlock Text="{local:Loc Key=packageEditor.pathDirectoriesHint}" Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,4,0,0" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <Grid Margin="0,4,0,10">
+                    <TextBlock Text="{local:Loc Key=packageEditor.releases}" Style="{StaticResource SectionTitle}" VerticalAlignment="Center" />
+                    <Button Content="&#xE710;" ToolTip="{local:Loc Key=packageEditor.addRelease}" Command="{Binding AddReleaseCommand}"
+                            Style="{StaticResource IconButton}" HorizontalAlignment="Right" />
+                </Grid>
+
+                <ItemsControl ItemsSource="{Binding Releases}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Style="{StaticResource Card}" Margin="0,0,0,12">
+                                <StackPanel>
+                                    <Grid Margin="0,0,0,12">
+                                        <TextBlock Text="{local:Loc Key=packageEditor.release}" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        <Button Content="&#xE74D;" ToolTip="{local:Loc Key=action.delete}"
+                                                Command="{Binding DataContext.RemoveReleaseCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                CommandParameter="{Binding}" Style="{StaticResource IconButton}" HorizontalAlignment="Right" />
+                                    </Grid>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition />
+                                            <ColumnDefinition Width="22" />
+                                            <ColumnDefinition />
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+                                        </Grid.RowDefinitions>
+                                        <StackPanel>
+                                            <TextBlock Text="{local:Loc Key=packageEditor.version}" Margin="0,0,0,5" />
+                                            <TextBox Text="{Binding Version, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource PackageEditorTextBox}" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2">
+                                            <TextBlock Text="{local:Loc Key=packageEditor.archiveType}" Margin="0,0,0,5" />
+                                            <ComboBox ItemsSource="{Binding DownloadTypes}" SelectedValue="{Binding ArchiveType}"
+                                                      SelectedValuePath="Value" DisplayMemberPath="DisplayName" Style="{StaticResource CompactComboBox}" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Row="1" Grid.ColumnSpan="3" Margin="0,14,0,0">
+                                            <TextBlock Text="{local:Loc Key=packageEditor.url}" Margin="0,0,0,5" />
+                                            <TextBox Text="{Binding Url, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource PackageEditorTextBox}" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Row="2" Grid.ColumnSpan="3" Margin="0,14,0,0">
+                                            <TextBlock Text="{local:Loc Key=packageEditor.sha256}" Margin="0,0,0,5" />
+                                            <TextBox Text="{Binding Sha256, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource PackageEditorTextBox}" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Row="3" Margin="0,14,0,0" Visibility="{Binding IsArchive, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                            <TextBlock Text="{local:Loc Key=packageEditor.stripPrefix}" Margin="0,0,0,5" />
+                                            <TextBox Text="{Binding StripPrefix, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource PackageEditorTextBox}" />
+                                            <TextBlock Text="{local:Loc Key=packageEditor.stripPrefixHint}" Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,4,0,0" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Row="3" Margin="0,14,0,0" Visibility="{Binding IsSingleFile, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                            <TextBlock Text="{local:Loc Key=packageEditor.fileName}" Margin="0,0,0,5" />
+                                            <TextBox Text="{Binding FileName, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource PackageEditorTextBox}" />
+                                            <TextBlock Text="{local:Loc Key=packageEditor.fileNameHint}" Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,4,0,0" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Row="3" Grid.Column="2" Margin="0,14,0,0">
+                                            <TextBlock Text="{local:Loc Key=packageEditor.launchPath}" Margin="0,0,0,5" />
+                                            <TextBox Text="{Binding LaunchPath, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource PackageEditorTextBox}" />
+                                        </StackPanel>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </ScrollViewer>
+
+        <Grid Grid.Row="2" Margin="0,16,0,0">
+            <TextBlock Text="{Binding Status}" Foreground="{StaticResource MutedTextBrush}" VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,220,0" />
+            <Button Content="&#xE74E;" ToolTip="{local:Loc Key=packageEditor.save}" Command="{Binding SaveCommand}"
+                    Style="{StaticResource PrimaryFooterIconButton}" HorizontalAlignment="Right" />
+        </Grid>
+    </Grid>
+</UserControl>

@@ -1,0 +1,18 @@
+{
+  "language": "de",
+  "startComponentsWithApp": false,
+  "closeToTrayOnWindowClose": true,
+  "runMissedJobsOnStartup": true,
+  "httpPort": 80,
+  "httpsPort": 443,
+  "smtpPort": 1025,
+  "notifyOnMailReceived": true,
+  "playSoundOnMailReceived": false,
+  "showQuickLocalhost": true,
+  "showQuickPhpMyAdmin": true,
+  "showQuickPowerShell": true,
+  "showQuickWww": true,
+  "showQuickAppRoot": true,
+  "webServer": "apache",
+  "fastCgiPort": 9000
+}
