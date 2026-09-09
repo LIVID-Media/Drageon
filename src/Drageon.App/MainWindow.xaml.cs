@@ -38,9 +38,8 @@ public partial class MainWindow : Window
             return;
         }
 
-        e.Cancel = true;
+        AllowClose = true;
         ShowInTaskbar = false;
-        Hide();
         HiddenToTray?.Invoke(this, EventArgs.Empty);
     }
 }

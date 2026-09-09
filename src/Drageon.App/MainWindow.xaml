@@ -4,7 +4,7 @@
         xmlns:vm="clr-namespace:Drageon.App.ViewModels"
         xmlns:views="clr-namespace:Drageon.App.Views"
         xmlns:local="clr-namespace:Drageon.App"
-        Title="{x:Static local:AppInfo.AppName}" Icon="/Assets/Brand/drageon-icon.png"
+        Title="{x:Static local:AppInfo.AppName}" Icon="/Assets/Brand/drageon.ico"
         Width="1180" Height="800" MinWidth="960" MinHeight="640"
         WindowStartupLocation="CenterScreen" Style="{StaticResource AppWindow}">
     <Window.Resources>
@@ -34,10 +34,11 @@
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
                 <StackPanel VerticalAlignment="Center" Margin="5,0,0,15">
-                    <Image Source="/Assets/Brand/drageon-logo.png" Width="220" Height="78"
-                           HorizontalAlignment="Left" Stretch="Uniform" SnapsToDevicePixels="True" />
-                    <TextBlock Text="{local:Loc Key=app.subtitle}" Foreground="{StaticResource SidebarSubtitleBrush}" FontSize="10"
-                               Margin="87,-12,0,0" TextWrapping="NoWrap" />
+                    <Image Width="220" Height="78" HorizontalAlignment="Left" Stretch="Uniform" SnapsToDevicePixels="True">
+                        <Image.Source>
+                            <BitmapImage UriSource="/Assets/Brand/drageon-logo.png" DecodePixelWidth="220" CacheOption="OnLoad" />
+                        </Image.Source>
+                    </Image>
                 </StackPanel>
 
                 <Grid Grid.Row="1">

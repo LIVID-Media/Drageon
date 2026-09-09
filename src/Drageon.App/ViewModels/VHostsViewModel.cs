@@ -23,6 +23,7 @@ public sealed class VHostsViewModel : ViewModelBase, IRefreshable
         DeleteCommand = new(_ => DeleteAsync()); RefreshCommand = new(_ => RefreshAsync());
         BrowseCommand = new(_ => Browse());
         OpenVhostFolderCommand = new RelayCommand(_ => OpenVhostFolder());
+        _ = RefreshAsync();
     }
 
     public ObservableCollection<VHostListItem> Hosts { get; } = [];

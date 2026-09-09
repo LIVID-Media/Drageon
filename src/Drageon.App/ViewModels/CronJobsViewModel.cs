@@ -6,7 +6,7 @@ using Drageon.Core;
 
 namespace Drageon.App.ViewModels;
 
-public sealed class CronJobsViewModel : ViewModelBase, IRefreshable
+public sealed class CronJobsViewModel : ViewModelBase, IRefreshable, IDisposable
 {
     private readonly AppServices _services;
     private CronJobItemViewModel? _selectedJob;
@@ -125,6 +125,8 @@ public sealed class CronJobsViewModel : ViewModelBase, IRefreshable
         foreach (var job in jobs.OrderBy(static item => item.Name)) Jobs.Add(new CronJobItemViewModel(job));
         SelectedJob = previous is null ? Jobs.FirstOrDefault() : Jobs.FirstOrDefault(item => item.Job.Id == previous) ?? Jobs.FirstOrDefault();
     }
+
+    public void Dispose() => _services.Cron.JobFinished -= OnJobFinished;
 
     private void NewJob()
     {

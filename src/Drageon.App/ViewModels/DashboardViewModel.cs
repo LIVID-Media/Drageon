@@ -4,7 +4,7 @@ using Drageon.Core;
 
 namespace Drageon.App.ViewModels;
 
-public sealed class DashboardViewModel : ViewModelBase, IRefreshable
+public sealed class DashboardViewModel : ViewModelBase, IRefreshable, IDisposable
 {
     private readonly AppServices _services;
     private readonly ComponentCardViewModel _databaseComponent;
@@ -201,6 +201,8 @@ public sealed class DashboardViewModel : ViewModelBase, IRefreshable
         StopComponentCommand.RaiseCanExecuteChanged();
         RestartComponentCommand.RaiseCanExecuteChanged();
     }
+
+    public void Dispose() => _services.Processes.StatusChanged -= OnStatusChanged;
 
     private async Task RunServersAsync(ServerOperation operation)
     {

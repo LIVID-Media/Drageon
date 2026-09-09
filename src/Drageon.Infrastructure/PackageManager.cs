@@ -381,7 +381,8 @@ public sealed class PackageManager(
         {
             Timeout = TimeSpan.FromMinutes(15)
         };
-        client.DefaultRequestHeaders.UserAgent.ParseAdd("Drageon/1.0.0 (+portable Windows development environment)");
+        var version = typeof(PackageManager).Assembly.GetName().Version?.ToString(3) ?? "unknown";
+        client.DefaultRequestHeaders.UserAgent.ParseAdd($"Drageon/{version} (+portable Windows development environment)");
         return client;
     }
 

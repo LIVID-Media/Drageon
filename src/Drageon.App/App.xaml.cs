@@ -1,12 +1,12 @@
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Interop;
+using System.Windows.Media;
 using System.Windows.Shell;
 using System.Windows.Threading;
 using Drageon.Core;
 using Drageon.Infrastructure;
-using Drawing = System.Drawing;
-using Forms = System.Windows.Forms;
 
 namespace Drageon.App;
 
@@ -26,15 +26,14 @@ public partial class App : System.Windows.Application
     private IAppLogService? _logs;
     private ICronScheduler? _cronScheduler;
     private ISmtpCatcher? _smtpCatcher;
-    private Forms.NotifyIcon? _trayIcon;
-    private Drawing.Icon? _applicationIcon;
-    private readonly List<Forms.ToolStripItem> _trayRuntimeItems = [];
+    private NativeTrayIcon? _trayIcon;
     private SingleInstanceCoordinator? _singleInstance;
     private CancellationTokenSource? _commandListenerLifetime;
     private bool _trayRuntimeActionRunning;
     private bool _isExiting;
     private bool _processManagerDisposed;
     private bool _backgroundServicesDisposed;
+    private IReadOnlyList<(string Id, string Title)> _navigation = [];
 
     public App()
     {
@@ -49,6 +48,8 @@ public partial class App : System.Windows.Application
 
     protected override async void OnStartup(StartupEventArgs e)
     {
+        // Drageon's UI is mostly static. Avoid WPF's sizeable per-process D3D allocation.
+        RenderOptions.ProcessRenderMode = RenderMode.SoftwareOnly;
         _ = SetCurrentProcessExplicitAppUserModelID("Drageon");
         base.OnStartup(e);
         try
@@ -103,10 +104,7 @@ public partial class App : System.Windows.Application
             var services = new AppServices(_paths, store, settings, language, packages, projects, _processManager, runtime, webServers, generators, logs, _cronScheduler, _smtpCatcher);
             _services = services;
 
-            var window = new MainWindow
-            {
-                DataContext = new ViewModels.MainViewModel(services)
-            };
+            var window = CreateMainWindow();
             MainWindow = window;
             InitializeTray(window);
             InitializeTaskbarJumpList();
@@ -149,7 +147,6 @@ public partial class App : System.Windows.Application
         _commandListenerLifetime?.Cancel();
         _commandListenerLifetime?.Dispose();
         _trayIcon?.Dispose();
-        _applicationIcon?.Dispose();
         if (!_backgroundServicesDisposed)
         {
             if (_smtpCatcher is not null) _smtpCatcher.MessageReceived -= OnMailReceived;
@@ -172,53 +169,54 @@ public partial class App : System.Windows.Application
 
     private void InitializeTray(MainWindow window)
     {
-        var menu = new Forms.ContextMenuStrip();
-        menu.Items.Add(Localization.Get("tray.open"), null, (_, _) => ShowMainWindow());
-
         if (window.DataContext is ViewModels.MainViewModel viewModel)
+            _navigation = viewModel.Navigation.Select(item => (item.Id, item.Title)).ToArray();
+        _trayIcon = new NativeTrayIcon("Drageon")
         {
-            var navigationMenu = new Forms.ToolStripMenuItem(Localization.Get("tray.navigation"));
-            foreach (var navigation in viewModel.Navigation)
-            {
-                var id = navigation.Id;
-                navigationMenu.DropDownItems.Add(navigation.Title, null, (_, _) => ShowPage(id));
-            }
-            menu.Items.Add(navigationMenu);
+            DoubleClickAction = ShowMainWindow,
+            MenuProvider = BuildTrayMenuAsync
+        };
+    }
+
+    private async Task<IReadOnlyList<NativeTrayMenuItem>> BuildTrayMenuAsync()
+    {
+        var navigation = _navigation.Select(item => new NativeTrayMenuItem(item.Title, () =>
+        {
+            ShowPage(item.Id);
+            return Task.CompletedTask;
+        })).ToArray();
+
+        var quickAccess = new List<NativeTrayMenuItem>
+        {
+            new("localhost", () => OpenQuickAccessAsync("localhost"))
+        };
+        try
+        {
+            if (await GetPhpMyAdminUrlAsync() is not null)
+                quickAccess.Add(new("phpMyAdmin", () => OpenQuickAccessAsync("phpmyadmin")));
         }
-
-        var quickAccessMenu = new Forms.ToolStripMenuItem(Localization.Get("tray.quickAccess"));
-        quickAccessMenu.DropDownItems.Add("localhost", null, async (_, _) => await OpenQuickAccessAsync("localhost"));
-        var phpMyAdminItem = quickAccessMenu.DropDownItems.Add("phpMyAdmin", null, async (_, _) => await OpenQuickAccessAsync("phpmyadmin"));
-        phpMyAdminItem.Visible = false;
-        quickAccessMenu.DropDownItems.Add("PowerShell", null, async (_, _) => await OpenQuickAccessAsync(PowerShellCommand));
-        menu.Items.Add(quickAccessMenu);
-        menu.Opening += async (_, _) =>
+        catch (Exception exception)
         {
-            phpMyAdminItem.Visible = false;
-            try { phpMyAdminItem.Visible = await GetPhpMyAdminUrlAsync() is not null; }
-            catch (Exception exception) { _logs?.Write("Application", exception.Message, LogSeverity.Error); }
-        };
+            _logs?.Write("Application", exception.Message, LogSeverity.Error);
+        }
+        quickAccess.Add(new("PowerShell", () => OpenQuickAccessAsync(PowerShellCommand)));
 
-        menu.Items.Add(new Forms.ToolStripSeparator());
-        AddTrayRuntimeItem(menu, "tray.server.start", () => _runtimeController!.StartAllAsync(), "tray.server.started");
-        AddTrayRuntimeItem(menu, "tray.server.stop", () => _runtimeController!.StopAllAsync(), "tray.server.stopped");
-        AddTrayRuntimeItem(menu, "tray.server.restart", RestartServersAsync, "tray.server.restarted");
-        menu.Items.Add(new Forms.ToolStripSeparator());
-        menu.Items.Add(Localization.Get("tray.exit"), null, async (_, _) => await ExitApplicationAsync());
-
-        _applicationIcon = LoadApplicationIcon();
-        _trayIcon = new Forms.NotifyIcon
-        {
-            Icon = _applicationIcon,
-            Text = "Drageon",
-            Visible = true,
-            ContextMenuStrip = menu
-        };
-        _trayIcon.DoubleClick += (_, _) => ShowMainWindow();
-        window.HiddenToTray += (_, _) =>
-        {
-            _trayIcon.ShowBalloonTip(2500, Localization.Get("tray.hidden.title"), Localization.Get("tray.hidden.text"), Forms.ToolTipIcon.Info);
-        };
+        return
+        [
+            new(Localization.Get("tray.open"), () =>
+            {
+                ShowMainWindow();
+                return Task.CompletedTask;
+            }),
+            new(Localization.Get("tray.navigation"), Children: navigation),
+            new(Localization.Get("tray.quickAccess"), Children: quickAccess),
+            NativeTrayMenuItem.Separator,
+            TrayRuntimeItem("tray.server.start", () => _runtimeController!.StartAllAsync(), "tray.server.started"),
+            TrayRuntimeItem("tray.server.stop", () => _runtimeController!.StopAllAsync(), "tray.server.stopped"),
+            TrayRuntimeItem("tray.server.restart", RestartServersAsync, "tray.server.restarted"),
+            NativeTrayMenuItem.Separator,
+            new(Localization.Get("tray.exit"), ExitApplicationAsync)
+        ];
     }
 
     private void InitializeTaskbarJumpList()
@@ -336,7 +334,7 @@ public partial class App : System.Windows.Application
         catch (Exception exception)
         {
             _logs?.Write("Application", exception.Message, LogSeverity.Error);
-            _trayIcon?.ShowBalloonTip(3000, "Drageon", exception.Message, Forms.ToolTipIcon.Error);
+            _trayIcon?.ShowBalloon(3000, "Drageon", exception.Message, NativeTrayBalloonIcon.Error);
         }
     }
 
@@ -358,37 +356,67 @@ public partial class App : System.Windows.Application
         return GetLocalUrl(launchPath);
     }
 
-    private static Drawing.Icon LoadApplicationIcon()
-    {
-        var resource = GetResourceStream(new Uri("pack://application:,,,/Assets/Brand/drageon.ico"));
-        if (resource is null) return (Drawing.Icon)Drawing.SystemIcons.Application.Clone();
-        using var icon = new Drawing.Icon(resource.Stream);
-        return (Drawing.Icon)icon.Clone();
-    }
-
     private void ShowMainWindow()
     {
-        if (MainWindow is MainWindow window)
+        Dispatcher.Invoke(() =>
         {
-            window.Dispatcher.Invoke(window.RestoreFromTray);
-        }
+            if (MainWindow is MainWindow existing)
+            {
+                existing.RestoreFromTray();
+                return;
+            }
+            if (_services is null || _isExiting) return;
+            var window = CreateMainWindow();
+            MainWindow = window;
+            window.Show();
+        });
     }
 
     private void ShowPage(string id)
     {
-        if (MainWindow is not MainWindow window) return;
-        window.Dispatcher.Invoke(() =>
+        Dispatcher.Invoke(() =>
         {
-            window.RestoreFromTray();
+            ShowMainWindow();
+            if (MainWindow is not MainWindow window) return;
             if (window.DataContext is ViewModels.MainViewModel viewModel) viewModel.NavigateTo(id);
         });
     }
 
-    private void AddTrayRuntimeItem(Forms.ContextMenuStrip menu, string titleKey, Func<Task> action, string successKey)
+    private MainWindow CreateMainWindow()
     {
-        var item = menu.Items.Add(Localization.Get(titleKey), null, async (_, _) => await ExecuteTrayRuntimeActionAsync(action, successKey));
-        _trayRuntimeItems.Add(item);
+        var window = new MainWindow
+        {
+            DataContext = new ViewModels.MainViewModel(_services!)
+        };
+        window.HiddenToTray += OnWindowHiddenToTray;
+        window.Closed += OnMainWindowClosed;
+        return window;
     }
+
+    private void OnWindowHiddenToTray(object? sender, EventArgs e) =>
+        _trayIcon?.ShowBalloon(2500, Localization.Get("tray.hidden.title"),
+            Localization.Get("tray.hidden.text"), NativeTrayBalloonIcon.Info);
+
+    private void OnMainWindowClosed(object? sender, EventArgs e)
+    {
+        if (sender is not MainWindow window) return;
+        window.HiddenToTray -= OnWindowHiddenToTray;
+        window.Closed -= OnMainWindowClosed;
+        if (window.DataContext is IDisposable disposable) disposable.Dispose();
+        window.DataContext = null;
+        if (ReferenceEquals(MainWindow, window)) MainWindow = null;
+        if (!_isExiting)
+        {
+            Dispatcher.BeginInvoke(() =>
+            {
+                GC.Collect(GC.MaxGeneration, GCCollectionMode.Aggressive, blocking: true, compacting: true);
+                GC.WaitForPendingFinalizers();
+            }, DispatcherPriority.ApplicationIdle);
+        }
+    }
+
+    private NativeTrayMenuItem TrayRuntimeItem(string titleKey, Func<Task> action, string successKey) =>
+        new(Localization.Get(titleKey), () => ExecuteTrayRuntimeActionAsync(action, successKey), IsEnabled: !_trayRuntimeActionRunning);
 
     private async Task RestartServersAsync()
     {
@@ -401,29 +429,27 @@ public partial class App : System.Windows.Application
     {
         if (_trayRuntimeActionRunning)
         {
-            _trayIcon?.ShowBalloonTip(2000, "Drageon", Localization.Get("tray.server.busy"), Forms.ToolTipIcon.Info);
+            _trayIcon?.ShowBalloon(2000, "Drageon", Localization.Get("tray.server.busy"), NativeTrayBalloonIcon.Info);
             return;
         }
 
         _trayRuntimeActionRunning = true;
-        foreach (var item in _trayRuntimeItems) item.Enabled = false;
         try
         {
             await action();
             var message = Localization.Get(successKey);
             _logs?.Write("Application", message);
-            _trayIcon?.ShowBalloonTip(2000, "Drageon", message, Forms.ToolTipIcon.Info);
+            _trayIcon?.ShowBalloon(2000, "Drageon", message, NativeTrayBalloonIcon.Info);
         }
         catch (Exception exception)
         {
             var message = string.Format(System.Globalization.CultureInfo.CurrentCulture, Localization.Get("tray.server.failed"), exception.Message);
             _logs?.Write("Application", message, LogSeverity.Error);
-            _trayIcon?.ShowBalloonTip(3000, "Drageon", message, Forms.ToolTipIcon.Error);
+            _trayIcon?.ShowBalloon(3000, "Drageon", message, NativeTrayBalloonIcon.Error);
         }
         finally
         {
             _trayRuntimeActionRunning = false;
-            foreach (var item in _trayRuntimeItems) item.Enabled = true;
         }
     }
 
@@ -448,11 +474,11 @@ public partial class App : System.Windows.Application
                     Localization.Get("mail.notification.message"),
                     subject,
                     senderText);
-                _trayIcon.ShowBalloonTip(
+                _trayIcon.ShowBalloon(
                     4000,
                     Localization.Get("mail.notification.title"),
                     notification,
-                    Forms.ToolTipIcon.Info);
+                    NativeTrayBalloonIcon.Info);
             }
 
             if (settings.PlaySoundOnMailReceived)
@@ -474,8 +500,8 @@ public partial class App : System.Windows.Application
                 var message = string.Format(System.Globalization.CultureInfo.CurrentCulture,
                     Localization.Get(result.Success ? "cron.notification.success" : "cron.notification.failed"),
                     SingleLine(result.JobName, 80), SingleLine(result.Message, 150));
-                _trayIcon.ShowBalloonTip(4000, Localization.Get("cron.notification.title"), message,
-                    result.Success ? Forms.ToolTipIcon.Info : Forms.ToolTipIcon.Error);
+                _trayIcon.ShowBalloon(4000, Localization.Get("cron.notification.title"), message,
+                    result.Success ? NativeTrayBalloonIcon.Info : NativeTrayBalloonIcon.Error);
             }
             if (settings.PlaySoundOnCronJobFinished)
             {
@@ -495,7 +521,8 @@ public partial class App : System.Windows.Application
     {
         if (_isExiting) return;
         _isExiting = true;
-        if (_trayIcon is not null) _trayIcon.Visible = false;
+        _trayIcon?.Dispose();
+        _trayIcon = null;
 
         if (_processManager is not null && !_processManagerDisposed)
         {
@@ -567,4 +594,3 @@ public sealed record AppServices(
     IAppLogService Logs,
     ICronScheduler Cron,
     ISmtpCatcher Mail);
-

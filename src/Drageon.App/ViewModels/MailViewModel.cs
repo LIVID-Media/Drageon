@@ -4,7 +4,7 @@ using Drageon.Core;
 
 namespace Drageon.App.ViewModels;
 
-public sealed class MailViewModel : ViewModelBase, IRefreshable
+public sealed class MailViewModel : ViewModelBase, IRefreshable, IDisposable
 {
     private readonly AppServices _services;
     private readonly SemaphoreSlim _refreshLock = new(1, 1);
@@ -29,6 +29,7 @@ public sealed class MailViewModel : ViewModelBase, IRefreshable
         ClearCommand = new AsyncRelayCommand(_ => ClearAsync());
         OpenAttachmentsCommand = new RelayCommand(_ => OpenAttachments());
         _services.Mail.MessageReceived += OnMessageReceived;
+        _ = RefreshAsync();
     }
 
     public ObservableCollection<MailItemViewModel> Messages { get; } = [];
@@ -185,6 +186,11 @@ public sealed class MailViewModel : ViewModelBase, IRefreshable
             SelectedMessage = Messages[0];
             Status = TF("mail.status.received", message.Subject);
         });
+    }
+
+    public void Dispose()
+    {
+        _services.Mail.MessageReceived -= OnMessageReceived;
     }
 }
 

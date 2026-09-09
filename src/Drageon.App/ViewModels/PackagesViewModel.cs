@@ -1,10 +1,12 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Windows.Data;
 using Drageon.Core;
 using Drageon.Infrastructure;
 
 namespace Drageon.App.ViewModels;
 
-public sealed class PackagesViewModel : ViewModelBase, IRefreshable
+public sealed class PackagesViewModel : ViewModelBase, IRefreshable, IDisposable
 {
     private readonly AppServices _services;
     private string _status;
@@ -13,6 +15,8 @@ public sealed class PackagesViewModel : ViewModelBase, IRefreshable
     {
         _services = services;
         _status = T("packages.status.loadingManifests");
+        GroupedComponents = CollectionViewSource.GetDefaultView(Components);
+        GroupedComponents.GroupDescriptions.Add(new PropertyGroupDescription(nameof(PackageComponentViewModel.CategoryName)));
         RefreshCommand = new AsyncRelayCommand(_ => RefreshAsync());
         VersionActionCommand = new AsyncRelayCommand(VersionActionAsync, static parameter => parameter is PackageComponentViewModel);
         DeleteCommand = new AsyncRelayCommand(DeleteAsync, static parameter => parameter is PackageComponentViewModel);
@@ -28,7 +32,7 @@ public sealed class PackagesViewModel : ViewModelBase, IRefreshable
     }
 
     public ObservableCollection<PackageComponentViewModel> Components { get; } = [];
-    public ObservableCollection<PackageGroupViewModel> Groups { get; } = [];
+    public ICollectionView GroupedComponents { get; }
     public AsyncRelayCommand RefreshCommand { get; }
     public AsyncRelayCommand VersionActionCommand { get; }
     public AsyncRelayCommand DeleteCommand { get; }
@@ -49,9 +53,10 @@ public sealed class PackagesViewModel : ViewModelBase, IRefreshable
             var installed = await _services.Packages.GetInstalledAsync();
             var statuses = _services.Processes.GetStatuses().ToDictionary(static item => item.Id, StringComparer.OrdinalIgnoreCase);
             Components.Clear();
-            Groups.Clear();
 
-            foreach (var manifest in manifests)
+            foreach (var manifest in manifests
+                         .OrderBy(manifest => CategoryOrder(NormalizeCategory(manifest.Category)))
+                         .ThenBy(manifest => manifest.DisplayName, StringComparer.CurrentCultureIgnoreCase))
             {
                 var isWebServer = _services.WebServers.TryGet(manifest.Id, out _);
                 var isSelectedWebServer = manifest.Id.Equals(_services.Settings.Current.WebServer, StringComparison.OrdinalIgnoreCase);
@@ -74,17 +79,10 @@ public sealed class PackagesViewModel : ViewModelBase, IRefreshable
 
                 var state = statuses.GetValueOrDefault(manifest.Id)?.State ?? ComponentState.Stopped;
                 var isDatabase = manifest.Category.Equals("database", StringComparison.OrdinalIgnoreCase);
+                var category = NormalizeCategory(manifest.Category);
                 Components.Add(new PackageComponentViewModel(manifest, options, state,
+                    Localization.Get($"packages.category.{category}", category),
                     isWebServer || isDatabase, !isWebServer || isSelectedWebServer, isWebServer, isSelectedWebServer));
-            }
-
-            foreach (var group in Components
-                         .GroupBy(static item => NormalizeCategory(item.Manifest.Category))
-                         .OrderBy(static group => CategoryOrder(group.Key)))
-            {
-                Groups.Add(new PackageGroupViewModel(
-                    Localization.Get($"packages.category.{group.Key}", group.Key),
-                    group.OrderBy(static item => item.Name, StringComparer.CurrentCultureIgnoreCase).ToArray()));
             }
 
             Status = TF("packages.status.available", Components.Count);
@@ -94,6 +92,8 @@ public sealed class PackagesViewModel : ViewModelBase, IRefreshable
             Status = exception.Message;
         }
     }
+
+    public void Dispose() => _services.Processes.StatusChanged -= OnProcessStatusChanged;
 
     private async Task VersionActionAsync(object? parameter)
     {
@@ -392,9 +392,10 @@ public sealed class PackageComponentViewModel : ViewModelBase
     private readonly bool _isSelectedWebServer;
 
     public PackageComponentViewModel(PackageManifest manifest, IReadOnlyList<PackageVersionOption> versions,
-        ComponentState state, bool canStart, bool showStartStop, bool isWebServer, bool isSelectedWebServer)
+        ComponentState state, string categoryName, bool canStart, bool showStartStop, bool isWebServer, bool isSelectedWebServer)
     {
         Manifest = manifest;
+        CategoryName = categoryName;
         Versions = new ObservableCollection<PackageVersionOption>(versions
             .OrderByDescending(static item => item.IsActive)
             .ThenByDescending(static item => item.Version));
@@ -408,6 +409,7 @@ public sealed class PackageComponentViewModel : ViewModelBase
     }
 
     public PackageManifest Manifest { get; }
+    public string CategoryName { get; }
     public ObservableCollection<PackageVersionOption> Versions { get; }
     public string Name => Manifest.Bundled
         ? Localization.Get($"package.{Manifest.Id}.name", Manifest.DisplayName)
@@ -495,8 +497,6 @@ public sealed class PackageComponentViewModel : ViewModelBase
         Raise(nameof(StateText));
     }
 }
-
-public sealed record PackageGroupViewModel(string Name, IReadOnlyList<PackageComponentViewModel> Components);
 
 public sealed record PackageVersionOption(string Version, PackageRelease? Release, bool IsInstalled, bool IsActive, bool ShowAsActive)
 {

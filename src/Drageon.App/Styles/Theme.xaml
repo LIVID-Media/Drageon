@@ -20,7 +20,6 @@
     <Color x:Key="TransitionBackgroundColor">#3A3020</Color>
     <Color x:Key="TextColor">#EEF6FF</Color>
     <Color x:Key="MutedTextColor">#8FA5BF</Color>
-    <Color x:Key="SidebarSubtitleColor">#8EC9FF</Color>
     <Color x:Key="LogTextColor">#A9BBCF</Color>
     <Color x:Key="WarningColor">#F5B942</Color>
     <Color x:Key="FavoriteColor">#FFD54A</Color>
@@ -43,7 +42,6 @@
     <SolidColorBrush x:Key="TransitionBackgroundBrush" Color="{StaticResource TransitionBackgroundColor}" />
     <SolidColorBrush x:Key="TextBrush" Color="{StaticResource TextColor}" />
     <SolidColorBrush x:Key="MutedTextBrush" Color="{StaticResource MutedTextColor}" />
-    <SolidColorBrush x:Key="SidebarSubtitleBrush" Color="{StaticResource SidebarSubtitleColor}" />
     <SolidColorBrush x:Key="LogTextBrush" Color="{StaticResource LogTextColor}" />
     <SolidColorBrush x:Key="WarningBrush" Color="{StaticResource WarningColor}" />
     <SolidColorBrush x:Key="FavoriteBrush" Color="{StaticResource FavoriteColor}" />

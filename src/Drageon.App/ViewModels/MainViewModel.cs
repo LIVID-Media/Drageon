@@ -2,7 +2,7 @@ using System.Collections.ObjectModel;
 
 namespace Drageon.App.ViewModels;
 
-public sealed class MainViewModel : ViewModelBase
+public sealed class MainViewModel : ViewModelBase, IDisposable
 {
     private readonly AppServices _services;
     private object _currentPage;
@@ -25,7 +25,7 @@ public sealed class MainViewModel : ViewModelBase
         ];
         _selectedItem = Navigation[0];
         _selectedItem.IsActive = true;
-        _currentPage = _selectedItem.Page!;
+        _currentPage = _selectedItem.CreatePage();
         NavigateCommand = new RelayCommand(Navigate);
         OpenAboutCommand = new RelayCommand(_ => OpenAbout());
         OpenSupportCommand = new RelayCommand(_ => OpenSupport());
@@ -68,24 +68,28 @@ public sealed class MainViewModel : ViewModelBase
             _ => null
         };
         if (item is null) return;
+        if (ReferenceEquals(item, SelectedItem))
+        {
+            if (CurrentPage is IRefreshable current) _ = current.RefreshAsync();
+            return;
+        }
+        DisposeCurrentPage();
         SelectedItem.IsActive = false;
         SelectedItem = item;
         SelectedItem.IsActive = true;
-        CurrentPage = item.Page;
-        if (item.Page is IRefreshable refreshable)
-        {
-            _ = refreshable.RefreshAsync();
-        }
+        CurrentPage = item.CreatePage();
     }
 
     private void OpenAbout()
     {
+        DisposeCurrentPage();
         SelectedItem.IsActive = false;
         CurrentPage = new AboutViewModel(_services, OpenSupport);
     }
 
     private void OpenSupport()
     {
+        DisposeCurrentPage();
         SelectedItem.IsActive = false;
         CurrentPage = new SupportViewModel(_services);
     }
@@ -94,17 +98,27 @@ public sealed class MainViewModel : ViewModelBase
         ? app.RequestExitAsync()
         : Task.CompletedTask;
 
+    public void Dispose()
+    {
+        DisposeCurrentPage();
+    }
+
+    private void DisposeCurrentPage()
+    {
+        if (CurrentPage is IDisposable disposable) disposable.Dispose();
+    }
+
 }
 
 public sealed class NavigationItem(string id, string title, string glyph, Func<object> pageFactory) : ViewModelBase
 {
-    private readonly Lazy<object> _page = new(pageFactory);
+    private readonly Func<object> _pageFactory = pageFactory;
     private bool _isActive;
 
     public string Id { get; } = id;
     public string Title { get; } = title;
     public string Glyph { get; } = glyph;
-    public object Page => _page.Value;
+    public object CreatePage() => _pageFactory();
 
     public bool IsActive
     {
