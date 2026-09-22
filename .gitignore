@@ -9,6 +9,7 @@ work/
 Thumbs.db
 .DS_Store
 README-LOCAL.md
+TODO.md
 
 # Die portable Vorlage gehört zum Projekt; ihre bin-Verzeichnisse sind keine Build-Ausgaben.
 !portable-template/bin/

@@ -24,7 +24,7 @@ public sealed class PackagesViewModel : ViewModelBase, IRefreshable, IDisposable
         StartStopCommand = new AsyncRelayCommand(StartStopAsync, static parameter => parameter is PackageComponentViewModel { ShowStartStop: true });
         OpenCommand = new RelayCommand(Open, static parameter => parameter is PackageComponentViewModel);
         OpenDownloadPageCommand = new RelayCommand(OpenDownloadPage, static parameter => parameter is PackageComponentViewModel { CanOpenDownloadPage: true });
-        ConfigureCommand = new RelayCommand(Configure, static parameter => parameter is PackageComponentViewModel);
+        ConfigureCommand = new RelayCommand(Configure, static parameter => parameter is PackageComponentViewModel { CanConfigure: true });
         NewManifestCommand = new RelayCommand(_ => OpenManifestEditor());
         EditManifestCommand = new RelayCommand(EditManifest, static parameter => parameter is PackageComponentViewModel);
         _services.Processes.StatusChanged += OnProcessStatusChanged;
@@ -313,11 +313,13 @@ public sealed class PackagesViewModel : ViewModelBase, IRefreshable, IDisposable
     private void Configure(object? parameter)
     {
         var component = (PackageComponentViewModel)parameter!;
+        if (!component.CanConfigure) return;
+        var configuredVersion = component.SelectedVersion is { IsInstalled: true } selected
+            ? selected.Version
+            : component.ActiveVersion?.Version ?? component.Versions.FirstOrDefault(static item => item.IsInstalled)?.Version;
+        if (configuredVersion is null) return;
         if (component.Manifest.Id == "php")
         {
-            var configuredVersion = component.SelectedVersion is { IsInstalled: true } selected
-                ? selected.Version
-                : component.ActiveVersion?.Version;
             new PhpSettingsWindow
             {
                 DataContext = new PhpViewModel(_services, configuredVersion),
@@ -326,9 +328,6 @@ public sealed class PackagesViewModel : ViewModelBase, IRefreshable, IDisposable
         }
         else if (component.Manifest.Id == "apache")
         {
-            var configuredVersion = component.SelectedVersion is { IsInstalled: true } selected
-                ? selected.Version
-                : component.ActiveVersion?.Version;
             new ApacheSettingsWindow
             {
                 DataContext = new ApacheSettingsViewModel(_services, configuredVersion),
@@ -337,8 +336,6 @@ public sealed class PackagesViewModel : ViewModelBase, IRefreshable, IDisposable
         }
         else if (component.Manifest.Id == "nginx")
         {
-            var configuredVersion = component.SelectedVersion is { IsInstalled: true } selected
-                ? selected.Version : component.ActiveVersion?.Version;
             new NginxSettingsWindow
             {
                 DataContext = new NginxSettingsViewModel(_services, configuredVersion),
@@ -347,12 +344,17 @@ public sealed class PackagesViewModel : ViewModelBase, IRefreshable, IDisposable
         }
         else if (component.Manifest.Id == "phpmyadmin")
         {
-            var configuredVersion = component.SelectedVersion is { IsInstalled: true } selected
-                ? selected.Version
-                : component.ActiveVersion?.Version;
             new PhpMyAdminSettingsWindow
             {
                 DataContext = new PhpMyAdminSettingsViewModel(_services, configuredVersion),
+                Owner = System.Windows.Application.Current.MainWindow
+            }.Show();
+        }
+        else if (component.Manifest.Id is "mysql" or "mariadb")
+        {
+            new DatabaseSettingsWindow
+            {
+                DataContext = new DatabaseSettingsViewModel(_services, component.Manifest.Id, configuredVersion),
                 Owner = System.Windows.Application.Current.MainWindow
             }.Show();
         }
@@ -423,7 +425,8 @@ public sealed class PackageComponentViewModel : ViewModelBase
     public bool CanOpen => Manifest.Id == "phpmyadmin" && ActiveVersion is not null;
     public bool CanOpenDownloadPage => Uri.TryCreate(Manifest.DownloadPageUrl, UriKind.Absolute, out var uri)
         && uri.Scheme is "http" or "https";
-    public bool CanConfigure => Manifest.Id is "apache" or "nginx" or "php" or "phpmyadmin";
+    public bool CanConfigure => Manifest.Id is "apache" or "nginx" or "php" or "phpmyadmin" or "mysql" or "mariadb"
+        && Versions.Any(static item => item.IsInstalled);
     public bool IsCustom => !Manifest.Bundled;
     public bool HasActiveVersion => Versions.Any(static item => item.IsActive);
     public bool IsRunning => _state == ComponentState.Running;

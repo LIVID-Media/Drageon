@@ -97,11 +97,15 @@ public partial class App : System.Windows.Application
             var packages = new PackageManager(_paths, store, language);
             await packages.RefreshEnvironmentAsync();
             var projects = new ProjectDiscoveryService(_paths, store, settings);
-            _cronScheduler = new CronScheduler(_paths, store, settings, logs, language);
+            var databaseBackups = new DatabaseBackupService(_paths, store, logs);
+            var projectSnapshots = new ProjectSnapshotService(_paths, store, projects, databaseBackups, logs);
+            var staging = new StagingService(_paths, store, projects, databaseBackups, projectSnapshots, logs);
+            _cronScheduler = new CronScheduler(_paths, store, logs, language);
             _cronScheduler.JobFinished += OnCronJobFinished;
+            runtime.WebServerStarted += OnWebServerStarted;
             _smtpCatcher = new SmtpCatcher(_paths, store, settings, logs, language);
             _smtpCatcher.MessageReceived += OnMailReceived;
-            var services = new AppServices(_paths, store, settings, language, packages, projects, _processManager, runtime, webServers, generators, logs, _cronScheduler, _smtpCatcher);
+            var services = new AppServices(_paths, store, settings, language, packages, projects, databaseBackups, projectSnapshots, staging, _processManager, runtime, webServers, generators, logs, _cronScheduler, _smtpCatcher);
             _services = services;
 
             var window = CreateMainWindow();
@@ -149,6 +153,7 @@ public partial class App : System.Windows.Application
         _trayIcon?.Dispose();
         if (!_backgroundServicesDisposed)
         {
+            if (_runtimeController is not null) _runtimeController.WebServerStarted -= OnWebServerStarted;
             if (_smtpCatcher is not null) _smtpCatcher.MessageReceived -= OnMailReceived;
             if (_cronScheduler is not null) _cronScheduler.JobFinished -= OnCronJobFinished;
             _smtpCatcher?.DisposeAsync().AsTask().GetAwaiter().GetResult();
@@ -511,6 +516,19 @@ public partial class App : System.Windows.Application
         });
     }
 
+    private async void OnWebServerStarted(object? sender, EventArgs e)
+    {
+        if (_isExiting || _cronScheduler is null) return;
+        try
+        {
+            await _cronScheduler.RunMissedJobsAsync();
+        }
+        catch (Exception exception)
+        {
+            _logs?.Write("Cron", exception.Message, LogSeverity.Error);
+        }
+    }
+
     private static string SingleLine(string value, int maximumLength)
     {
         var result = value.Replace('\r', ' ').Replace('\n', ' ').Trim();
@@ -533,6 +551,7 @@ public partial class App : System.Windows.Application
 
         if (!_backgroundServicesDisposed)
         {
+            if (_runtimeController is not null) _runtimeController.WebServerStarted -= OnWebServerStarted;
             if (_smtpCatcher is not null) _smtpCatcher.MessageReceived -= OnMailReceived;
             if (_smtpCatcher is not null) await _smtpCatcher.DisposeAsync();
             if (_cronScheduler is not null) await _cronScheduler.DisposeAsync();
@@ -587,6 +606,9 @@ public sealed record AppServices(
     ILanguageService Language,
     IPackageManager Packages,
     IProjectDiscoveryService Projects,
+    IDatabaseBackupService DatabaseBackups,
+    IProjectSnapshotService ProjectSnapshots,
+    IStagingService Staging,
     IProcessManager Processes,
     IRuntimeController Runtime,
     IWebServerRegistry WebServers,

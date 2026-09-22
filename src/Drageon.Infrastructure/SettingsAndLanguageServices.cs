@@ -35,9 +35,18 @@ public sealed class LanguageService(IPortablePathService paths) : ILanguageServi
             throw new FileNotFoundException($"Die Sprachdatei '{language}' wurde nicht gefunden.", file);
         }
 
+        var translations = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var fallbackFile = paths.Resolve("app", "languages", "en.json");
+        if (!file.Equals(fallbackFile, StringComparison.OrdinalIgnoreCase) && File.Exists(fallbackFile))
+        {
+            await using var fallbackStream = File.OpenRead(fallbackFile);
+            foreach (var item in await JsonSerializer.DeserializeAsync<Dictionary<string, string>>(fallbackStream, cancellationToken: cancellationToken).ConfigureAwait(false) ?? [])
+                translations[item.Key] = item.Value;
+        }
         await using var stream = File.OpenRead(file);
-        _translations = await JsonSerializer.DeserializeAsync<Dictionary<string, string>>(stream, cancellationToken: cancellationToken).ConfigureAwait(false)
-            ?? new Dictionary<string, string>();
+        foreach (var item in await JsonSerializer.DeserializeAsync<Dictionary<string, string>>(stream, cancellationToken: cancellationToken).ConfigureAwait(false) ?? [])
+            translations[item.Key] = item.Value;
+        _translations = translations;
         CurrentLanguage = language;
     }
 

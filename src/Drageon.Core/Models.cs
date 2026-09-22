@@ -10,7 +10,6 @@ public sealed record AppSettings
     public string Language { get; init; } = "de";
     public bool StartComponentsWithApp { get; init; }
     public bool CloseToTrayOnWindowClose { get; init; } = true;
-    public bool RunMissedJobsOnStartup { get; init; } = true;
     public int HttpPort { get; init; } = 80;
     public int HttpsPort { get; init; } = 443;
     public int SmtpPort { get; init; } = 1025;
@@ -137,16 +136,75 @@ public sealed record LocalProject(
     string Id,
     string Name,
     string DirectoryPath,
+    string RelativePath,
     string Url,
     string Type,
     IReadOnlyList<string> Technologies,
     bool IsFavorite,
-    bool HasVirtualHost);
+    bool HasVirtualHost,
+    string? DatabaseName = null,
+    string? VirtualHost = null,
+    string? StagingOf = null);
 
-public sealed record ProjectPreferences
+public sealed record ProjectMetadata
 {
-    public IReadOnlyList<string> Favorites { get; init; } = [];
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Name { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool Favorite { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Database { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Url { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Vhost { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? StagingOf { get; init; }
+
+    [JsonIgnore]
+    public bool IsEmpty => string.IsNullOrWhiteSpace(Name) && !Favorite && string.IsNullOrWhiteSpace(Database) && string.IsNullOrWhiteSpace(Url)
+        && string.IsNullOrWhiteSpace(Vhost) && string.IsNullOrWhiteSpace(StagingOf);
 }
+
+public sealed record DatabaseConnection(string Host = "127.0.0.1", int Port = 3306, string User = "root", string? Password = null);
+public sealed record DatabaseServerInfo(string ComponentId, string DisplayName, string Version, string ClientPath, string DumpPath, DatabaseConnection Connection);
+public sealed record DatabaseBackupInfo(string Path, string DatabaseName, DateTimeOffset CreatedAt, long Size)
+{
+    public string FileName => System.IO.Path.GetFileName(Path);
+    public string SizeLabel => Size < 1024 * 1024 ? $"{Math.Max(1, Size / 1024)} KB" : $"{Size / 1024d / 1024d:F1} MB";
+}
+public sealed record ProjectSnapshotInfo(
+    string DirectoryPath,
+    string ProjectPath,
+    string ProjectName,
+    DateTimeOffset CreatedAt,
+    string Description,
+    string? DatabaseName,
+    string? DatabaseType,
+    string? DatabaseVersion,
+    bool IncludesFiles = true,
+    bool IncludesVirtualHost = false,
+    bool IncludesMetadata = true);
+
+public sealed record SnapshotFileEntry(string Path, string Kind, string? LinkTarget = null);
+public sealed record ProjectSnapshotManifest
+{
+    public required ProjectSnapshotInfo Snapshot { get; init; }
+    public required IReadOnlyList<SnapshotFileEntry> Entries { get; init; }
+    public ProjectMetadata? Metadata { get; init; }
+    public VirtualHostDefinition? VirtualHost { get; init; }
+}
+
+public sealed record StagingRequest(
+    string SourceProjectPath,
+    string ProjectName,
+    string TargetProjectPath,
+    string Url,
+    string? TargetDatabase,
+    bool CopyDatabase,
+    bool CreateVirtualHost);
+
+public sealed record StagingResult(string ProjectPath, string? DatabaseName, string Url);
 
 public sealed record PhpSettings
 {
@@ -198,6 +256,8 @@ public sealed record MariaDbSettings
     public int MaxConnections { get; init; } = 100;
     public string BufferPoolSize { get; init; } = "64M";
     public string CustomConfiguration { get; init; } = "";
+    public string DatabaseUser { get; init; } = "root";
+    public string ProtectedPassword { get; init; } = "";
 }
 
 public sealed record MySqlSettings
@@ -207,6 +267,8 @@ public sealed record MySqlSettings
     public int MaxConnections { get; init; } = 100;
     public string BufferPoolSize { get; init; } = "64M";
     public string CustomConfiguration { get; init; } = "";
+    public string DatabaseUser { get; init; } = "root";
+    public string ProtectedPassword { get; init; } = "";
 }
 
 public sealed record MailMessageSummary(

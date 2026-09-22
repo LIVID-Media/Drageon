@@ -13,6 +13,7 @@ public sealed class VHostsViewModel : ViewModelBase, IRefreshable
     private readonly AppServices _services;
     private VHostListItem? _selectedHost;
     private string _hostName = "", _serverName = "localhost", _documentRoot = "", _port = "", _status = "";
+    private string? _selectedProjectPath, _loadedProjectPath, _loadedHostName;
     private bool _enabled = true;
 
     public VHostsViewModel(AppServices services)
@@ -27,6 +28,7 @@ public sealed class VHostsViewModel : ViewModelBase, IRefreshable
     }
 
     public ObservableCollection<VHostListItem> Hosts { get; } = [];
+    public ObservableCollection<VHostProjectChoice> Projects { get; } = [];
     public ObservableCollection<VHostServerConfigurationViewModel> ServerConfigurations { get; }
     public AsyncRelayCommand NewCommand { get; }
     public AsyncRelayCommand SaveCommand { get; }
@@ -41,11 +43,15 @@ public sealed class VHostsViewModel : ViewModelBase, IRefreshable
     public string DocumentRoot { get => _documentRoot; set => Set(ref _documentRoot, value); }
     public string Port { get => _port; set => Set(ref _port, value); }
     public bool Enabled { get => _enabled; set => Set(ref _enabled, value); }
+    public string? SelectedProjectPath { get => _selectedProjectPath; set => Set(ref _selectedProjectPath, value); }
     public string Status { get => _status; private set => Set(ref _status, value); }
 
     public async Task RefreshAsync()
     {
         Directory.CreateDirectory(DirectoryPath);
+        Projects.Clear();
+        Projects.Add(new(null, T("vhosts.project.none")));
+        foreach (var project in await _services.Projects.GetProjectsAsync()) Projects.Add(new(project.RelativePath, project.Name));
         var previous = SelectedHost?.Path;
         Hosts.Clear();
         foreach (var path in Directory.EnumerateFiles(DirectoryPath, "*.json").Order(StringComparer.CurrentCultureIgnoreCase))
@@ -64,6 +70,9 @@ public sealed class VHostsViewModel : ViewModelBase, IRefreshable
         DocumentRoot = "";
         Port = _services.Settings.Current.HttpPort.ToString(System.Globalization.CultureInfo.InvariantCulture);
         Enabled = true;
+        SelectedProjectPath = null;
+        _loadedProjectPath = null;
+        _loadedHostName = null;
         foreach (var configuration in ServerConfigurations) configuration.Content = "";
         Status = T("vhosts.status.new");
         return Task.CompletedTask;
@@ -78,6 +87,9 @@ public sealed class VHostsViewModel : ViewModelBase, IRefreshable
             DocumentRoot = ToPortablePath(host.DocumentRoot);
             Port = (host.Port ?? _services.Settings.Current.HttpPort).ToString(System.Globalization.CultureInfo.InvariantCulture);
             Enabled = host.Enabled;
+            _loadedHostName = host.Host;
+            _loadedProjectPath = (await _services.Projects.GetProjectsAsync()).FirstOrDefault(project => project.VirtualHost?.Equals(host.Host, StringComparison.OrdinalIgnoreCase) == true)?.RelativePath;
+            SelectedProjectPath = _loadedProjectPath;
             foreach (var configuration in ServerConfigurations) configuration.Content = host.GetServerConfiguration(configuration.ServerId);
             Status = TF("vhosts.status.loaded", Path.GetFileName(item.Path));
         }
@@ -117,6 +129,9 @@ public sealed class VHostsViewModel : ViewModelBase, IRefreshable
         if (oldPath is not null && !oldPath.Equals(path, StringComparison.OrdinalIgnoreCase) && File.Exists(oldPath))
             File.Delete(oldPath);
         _selectedHost = new(host.Host, path, host.Enabled);
+        await new ProjectMetadataStore(_services.Paths, _services.Store).AssignVirtualHostAsync(_loadedProjectPath, SelectedProjectPath, _loadedHostName ?? host.Host, host.Host);
+        _loadedProjectPath = SelectedProjectPath;
+        _loadedHostName = host.Host;
         return Path.GetFileName(path);
     }
 
@@ -125,6 +140,7 @@ public sealed class VHostsViewModel : ViewModelBase, IRefreshable
         if (SelectedHost is null) return;
         if (System.Windows.MessageBox.Show(TF("vhosts.confirm.delete", SelectedHost.HostName), T("vhosts.deleteTitle"), System.Windows.MessageBoxButton.YesNo, System.Windows.MessageBoxImage.Warning) != System.Windows.MessageBoxResult.Yes) return;
         var fileName = Path.GetFileName(SelectedHost.Path); File.Delete(SelectedHost.Path);
+        await new ProjectMetadataStore(_services.Paths, _services.Store).AssignVirtualHostAsync(_loadedProjectPath, null, SelectedHost.HostName, SelectedHost.HostName);
         await GenerateAllAsync(); await RefreshAsync(); Status = TF("vhosts.status.deleted", fileName);
     }
 
@@ -214,6 +230,8 @@ public sealed record VHostListItem(string HostName, string Path, bool Enabled)
 {
     public string DisplayName => Enabled ? HostName : $"{HostName} ({Localization.Get("state.inactive")})";
 }
+
+public sealed record VHostProjectChoice(string? Path, string Name);
 
 public sealed class VHostServerConfigurationViewModel(string serverId, string displayName) : ViewModelBase
 {

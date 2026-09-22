@@ -6,7 +6,7 @@ public sealed class PortablePathService : IPortablePathService
 {
     private static readonly string[][] RequiredDirectories =
     [
-        ["www"], ["data", "mariadb"], ["data", "mysql"], ["data", "mail"],
+        ["www"], ["data", "mariadb"], ["data", "mysql"], ["data", "mail"], ["data", "backups", "databases"], ["data", "snapshots"],
         ["bin", "apache"], ["bin", "nginx"], ["app", "config", "vhosts"], ["app", "var", "logs", "nginx"], ["bin", "php"], ["bin", "mariadb"], ["bin", "mysql"], ["bin", "phpmyadmin"], ["bin", "curl"],
         ["app", "config", "php"], ["app", "config", "mariadb"], ["app", "config", "mysql"], ["app", "config", "phpmyadmin"],
         ["app", "languages"], ["app", "packages"],

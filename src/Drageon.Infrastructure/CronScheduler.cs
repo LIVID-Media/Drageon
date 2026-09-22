@@ -7,14 +7,16 @@ namespace Drageon.Infrastructure;
 public sealed class CronScheduler(
     IPortablePathService paths,
     JsonFileStore store,
-    ISettingsService settings,
     IAppLogService logs,
     ILanguageService? language = null) : ICronScheduler
 {
     private const int InlineOutputLimit = 500;
     private readonly string _jobsPath = paths.Resolve("app", "config", "cronjobs.json");
     private readonly SemaphoreSlim _fileGate = new(1, 1);
+    private readonly SemaphoreSlim _missedJobsGate = new(1, 1);
     private readonly ConcurrentDictionary<Guid, byte> _runningJobs = new();
+    private HashSet<Guid> _missedJobIds = [];
+    private volatile bool _missedJobsHandled;
     private CancellationTokenSource? _lifetime;
     private Task? _loop;
 
@@ -26,11 +28,27 @@ public sealed class CronScheduler(
         if (IsRunning) return;
         _lifetime = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         logs.Write("Cron", T("scheduler.started", "Interner Scheduler gestartet."));
-        if (settings.Current.RunMissedJobsOnStartup)
-        {
-            await RunMissedJobsAsync(_lifetime.Token).ConfigureAwait(false);
-        }
+        _missedJobIds = await FindMissedJobIdsAsync(_lifetime.Token).ConfigureAwait(false);
         _loop = RunLoopAsync(_lifetime.Token);
+    }
+
+    public async Task RunMissedJobsAsync(CancellationToken cancellationToken = default)
+    {
+        await _missedJobsGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            if (_missedJobsHandled) return;
+            var jobs = await ReadJobsAsync(cancellationToken).ConfigureAwait(false);
+            foreach (var job in jobs.Where(job => _missedJobIds.Contains(job.Id) && job.Enabled && job.CatchUpMissedRun))
+            {
+                await ExecuteJobAsync(job, cancellationToken).ConfigureAwait(false);
+            }
+            _missedJobsHandled = true;
+        }
+        finally
+        {
+            _missedJobsGate.Release();
+        }
     }
 
     public Task ReloadAsync(CancellationToken cancellationToken = default)
@@ -75,14 +93,16 @@ public sealed class CronScheduler(
         foreach (var job in await ReadJobsAsync(cancellationToken).ConfigureAwait(false))
         {
             if (!job.Enabled || !Matches(job, minute)) continue;
+            if (!_missedJobsHandled && _missedJobIds.Contains(job.Id)) continue;
             if (job.LastRunAt is not null && job.LastRunAt.Value >= minute) continue;
             _ = ExecuteJobAsync(job, cancellationToken);
         }
     }
 
-    private async Task RunMissedJobsAsync(CancellationToken cancellationToken)
+    private async Task<HashSet<Guid>> FindMissedJobIdsAsync(CancellationToken cancellationToken)
     {
         var now = DateTimeOffset.Now;
+        var result = new HashSet<Guid>();
         foreach (var job in await ReadJobsAsync(cancellationToken).ConfigureAwait(false))
         {
             if (!job.Enabled || !job.CatchUpMissedRun || job.LastRunAt is null) continue;
@@ -96,8 +116,9 @@ public sealed class CronScheduler(
                 missed = true;
                 break;
             }
-            if (missed) await ExecuteJobAsync(job, cancellationToken).ConfigureAwait(false);
+            if (missed) result.Add(job.Id);
         }
+        return result;
     }
 
     private async Task ExecuteJobAsync(ScheduledJob job, CancellationToken cancellationToken)

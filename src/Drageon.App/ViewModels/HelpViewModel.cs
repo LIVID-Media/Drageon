@@ -13,6 +13,12 @@ public sealed class HelpViewModel
         ComponentsTitle = T("components.title");
         ComponentsText = T("components.text");
         ComponentsHint = T("components.hint");
+        BackupsTitle = T("backups.title");
+        BackupsText = T("backups.text");
+        BackupsHint = T("backups.hint");
+        ProjectsTitle = T("projects.title");
+        ProjectsText = T("projects.text");
+        ProjectsHint = T("projects.hint");
         VHostsTitle = T("vhosts.title");
         VHostsText = T("vhosts.text");
         VHostsHint = T("vhosts.hint");
@@ -46,6 +52,12 @@ public sealed class HelpViewModel
     public string ComponentsTitle { get; }
     public string ComponentsText { get; }
     public string ComponentsHint { get; }
+    public string BackupsTitle { get; }
+    public string BackupsText { get; }
+    public string BackupsHint { get; }
+    public string ProjectsTitle { get; }
+    public string ProjectsText { get; }
+    public string ProjectsHint { get; }
     public string VHostsTitle { get; }
     public string VHostsText { get; }
     public string VHostsHint { get; }

@@ -1,0 +1,42 @@
+<Window x:Class="Drageon.App.ProjectToolsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:Drageon.App"
+        Title="{local:Loc Key=projects.tools.title}" Width="650" Height="440" MinWidth="560" MinHeight="390"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False" Style="{StaticResource AppWindow}">
+    <Grid Margin="24">
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+        <Grid>
+            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+            <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <TextBox Text="{Binding ProjectName, UpdateSourceTrigger=PropertyChanged}" FontSize="24" FontWeight="SemiBold"
+                     MinHeight="44" VerticalContentAlignment="Center" ToolTip="{local:Loc Key=projects.name.edit}"/>
+            <Button Grid.Column="1" Content="&#xE74E;" ToolTip="{local:Loc Key=projects.name.save}"
+                    Command="{Binding SaveProjectNameCommand}" Style="{StaticResource IconButton}" Margin="10,0,0,0"/>
+            <TextBlock Grid.Row="1" Grid.ColumnSpan="2" Text="{Binding NameStatus}" Style="{StaticResource MutedText}" Margin="0,6,0,0"/>
+        </Grid>
+        <Grid Grid.Row="1" Margin="0,16,0,0">
+            <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="14"/><ColumnDefinition/></Grid.ColumnDefinitions>
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Text="{Binding Project.SnapshotHeading}" Style="{StaticResource SectionTitle}"/>
+                    <TextBlock Text="{local:Loc Key=projects.tools.snapshotsHint}" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,5,0,18"/>
+                    <StackPanel Orientation="Horizontal">
+                        <Button Content="&#xE7AA;" ToolTip="{local:Loc Key=snapshots.create}" Command="{Binding Owner.CreateSnapshotCommand}" CommandParameter="{Binding Project}" Style="{StaticResource IconButton}" Margin="0,0,8,0"/>
+                        <Button Content="&#xE8D4;" ToolTip="{local:Loc Key=snapshots.manage}" Visibility="{Binding Project.SnapshotActionsVisibility}" Command="{Binding Owner.ManageSnapshotCommand}" CommandParameter="{Binding Project}" Style="{StaticResource IconButton}"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+            <Border Grid.Column="2" Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Text="{Binding Project.StagingHeading}" Style="{StaticResource SectionTitle}"/>
+                    <TextBlock Text="{Binding Project.StagingHint}" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,5,0,18"/>
+                    <StackPanel Orientation="Horizontal">
+                        <Button Content="&#xE7C4;" ToolTip="{local:Loc Key=staging.create}" Visibility="{Binding Project.MainProjectVisibility}" Command="{Binding Owner.CreateStagingCommand}" CommandParameter="{Binding Project}" Style="{StaticResource IconButton}" Margin="0,0,8,0"/>
+                        <Button Content="&#xE74D;" ToolTip="{local:Loc Key=staging.delete}" Visibility="{Binding Project.StagingDeleteVisibility}" Command="{Binding DeleteStagingCommand}" Style="{StaticResource IconButton}"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Grid>
+    </Grid>
+</Window>

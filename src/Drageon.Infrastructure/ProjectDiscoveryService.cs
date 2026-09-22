@@ -28,12 +28,11 @@ public sealed class ProjectDiscoveryService(
             || context.HasTopLevelFiles("*.html") || context.HasTopLevelFiles("*.htm"))
     ];
 
-    private readonly string _preferencesPath = paths.Resolve("app", "config", "projects.json");
-    private readonly SemaphoreSlim _preferencesLock = new(1, 1);
+    private readonly ProjectMetadataStore _metadata = new(paths, store);
 
     public async Task<IReadOnlyList<LocalProject>> GetProjectsAsync(CancellationToken cancellationToken = default)
     {
-        var favorites = await ReadFavoritesAsync(cancellationToken).ConfigureAwait(false);
+        var metadata = await _metadata.ReadAndPruneAsync(cancellationToken).ConfigureAwait(false);
         var virtualHosts = await ReadVirtualHostsAsync(cancellationToken).ConfigureAwait(false);
         var wwwRoot = paths.Resolve("www");
         if (!Directory.Exists(wwwRoot)) return [];
@@ -50,16 +49,22 @@ public sealed class ProjectDiscoveryService(
                 ?? new ProjectTypeRule("Webprojekt", [], static _ => true);
             var virtualHost = virtualHosts.FirstOrDefault(host => IsPathWithin(directory, host.DocumentRoot));
             var id = name;
-            var url = virtualHost is null ? CreateFolderUrl(name) : CreateVirtualHostUrl(virtualHost);
+            var relativePath = $"www/{name}";
+            var projectMetadata = metadata.GetValueOrDefault(relativePath);
+            var url = projectMetadata?.Url ?? (virtualHost is null ? CreateFolderUrl(name) : CreateVirtualHostUrl(virtualHost));
             projects.Add(new LocalProject(
                 id,
-                name,
+                projectMetadata?.Name ?? name,
                 directory,
+                relativePath,
                 url,
                 detection.Type,
                 detection.Technologies,
-                favorites.Contains(id),
-                virtualHost is not null));
+                projectMetadata?.Favorite == true,
+                virtualHost is not null || !string.IsNullOrWhiteSpace(projectMetadata?.Vhost),
+                projectMetadata?.Database,
+                projectMetadata?.Vhost,
+                projectMetadata?.StagingOf));
         }
 
         return projects;
@@ -72,32 +77,23 @@ public sealed class ProjectDiscoveryService(
             throw new ArgumentException("Ungültige Projekt-ID.", nameof(projectId));
         }
 
-        await _preferencesLock.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            var favorites = await ReadFavoritesAsync(cancellationToken).ConfigureAwait(false);
-            if (isFavorite) favorites.Add(projectId);
-            else favorites.Remove(projectId);
-
-            await store.WriteAsync(
-                _preferencesPath,
-                new ProjectPreferences { Favorites = favorites.Order(StringComparer.CurrentCultureIgnoreCase).ToArray() },
-                cancellationToken).ConfigureAwait(false);
-        }
-        finally
-        {
-            _preferencesLock.Release();
-        }
+        await _metadata.UpdateAsync($"www/{projectId}", value => value with { Favorite = isFavorite }, cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<HashSet<string>> ReadFavoritesAsync(CancellationToken cancellationToken)
-    {
-        var preferences = await store.ReadAsync<ProjectPreferences>(_preferencesPath, cancellationToken).ConfigureAwait(false)
-            ?? new ProjectPreferences();
-        return preferences.Favorites
-            .Where(static item => !string.IsNullOrWhiteSpace(item))
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-    }
+    public Task SetDatabaseAsync(string projectPath, string? databaseName, CancellationToken cancellationToken = default) =>
+        _metadata.UpdateAsync(projectPath, value => value with { Database = databaseName }, cancellationToken);
+
+    public Task SetNameAsync(string projectPath, string? projectName, CancellationToken cancellationToken = default) =>
+        _metadata.UpdateAsync(projectPath, value => value with { Name = projectName }, cancellationToken);
+
+    public Task SetVirtualHostAsync(string projectPath, string? virtualHost, CancellationToken cancellationToken = default) =>
+        _metadata.UpdateAsync(projectPath, value => value with { Vhost = virtualHost }, cancellationToken);
+
+    public Task<ProjectMetadata?> GetMetadataAsync(string projectPath, CancellationToken cancellationToken = default) =>
+        _metadata.GetAsync(projectPath, cancellationToken);
+
+    public Task SetMetadataAsync(string projectPath, ProjectMetadata metadata, CancellationToken cancellationToken = default) =>
+        _metadata.SetAsync(projectPath, metadata, cancellationToken);
 
     private async Task<IReadOnlyList<VirtualHostMapping>> ReadVirtualHostsAsync(CancellationToken cancellationToken) =>
         (await new VirtualHostStore(paths, store).ReadAsync(cancellationToken: cancellationToken))

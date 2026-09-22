@@ -11,7 +11,7 @@
 
 **English** · [Deutsch](README.de.md)
 
-Drageon brings your local web development stack into one lightweight Windows application. Manage **Apache or Nginx, PHP, MariaDB or MySQL, phpMyAdmin, Composer, Node.js, cURL, projects, virtual hosts, cron jobs, test emails and logs** from a single interface.
+Drageon brings your local web development stack into one lightweight Windows application. Manage **Apache or Nginx, PHP, MariaDB or MySQL, phpMyAdmin, Composer, Node.js, cURL, projects, virtual hosts, backups, snapshots, staging, cron jobs, test emails and logs** from a single interface.
 
 Everything stays inside the Drageon folder: applications, projects, databases and configuration. Drageon does not rely on Windows services, does not write fixed installation paths to the registry and does not modify the system-wide `PATH`.
 
@@ -26,6 +26,7 @@ Copy it, move it or keep it on an external drive — your development environmen
 - **Multiple versions side by side** — install and switch between component versions when needed.
 - **Apache or Nginx** — choose the web server that fits your project.
 - **MariaDB or MySQL** — both database providers are supported with separate data directories.
+- **Backups and snapshots** — create SQL backups, restore databases, and capture complete project states before risky changes.
 - **Portable developer shell** — PowerShell automatically receives the active PHP environment and selected CLI tools.
 - **Project friendly** — folders under `www/` are detected automatically; virtual hosts are optional.
 - **Built-in development helpers** — cron scheduler, SMTP catcher, centralized logs and tray controls.
@@ -65,7 +66,7 @@ Installed versions live under `bin/` and can be activated, switched or removed f
 
 ## Projects and virtual hosts
 
-Folders directly below `www/` are detected automatically. Drageon recognizes common project types including Contao/Symfony, Laravel, WordPress, Composer/PHP projects, Node/frontend projects and static HTML sites.
+Folders directly below `www/` are the sole source of existing projects and are detected automatically. Drageon recognizes common project types including Contao/Symfony, Laravel, WordPress, Composer/PHP projects, Node/frontend projects and static HTML sites. Adding a folder does not create a configuration entry.
 
 Without any additional configuration, a folder such as
 
@@ -79,6 +80,10 @@ is available through
 http://localhost/my-project/
 ```
 
+`app/config/projects.json` contains optional settings only for projects that were configured explicitly. These settings can include a display name, favorite state, assigned database, custom URL, associated virtual host, or staging relationship. Missing project folders are removed from this metadata file when projects are scanned.
+
+An existing user database from the active MySQL or MariaDB server can be assigned to a project. The assignment enables database-aware snapshots and staging; it does not turn Drageon into a general database manager. If an assigned database is no longer available, Drageon keeps the assignment visible until it is deliberately changed or removed.
+
 Optional virtual hosts can be created directly in Drageon, for example:
 
 ```json
@@ -90,9 +95,19 @@ Optional virtual hosts can be created directly in Drageon, for example:
 }
 ```
 
-The same virtual-host definition can be used by Apache and Nginx, with separate advanced configuration where needed.
+The same virtual-host definition can be used by Apache and Nginx, with separate advanced configuration where needed. A virtual host can optionally be linked to a detected project; renaming, reassigning, or deleting the host updates the project metadata without creating or deleting the project itself.
+
+The project tools can create complete snapshots under `data/snapshots/`. They preserve files, dotfiles, empty directories, symbolic links, directory links, and junctions without copying linked external content. An assigned database, project metadata, and relevant virtual-host definition are included when available. Restoring a snapshot can first preserve the current state as a safety snapshot.
+
+Local staging copies can be created from main projects. Drageon copies the project tree with link-aware paths and can optionally copy the assigned database and create a virtual host. Multiple instances receive numbered suggestions. Project files are never modified to inject CMS-specific database settings, so the staging database connection must be updated manually after a database copy. Deleting a staging instance also removes its Drageon-created virtual host, optional database, metadata, and snapshots after confirmation.
 
 ![Drageon project management](docs/images/projects-en.png)
+
+## Database backups
+
+The **Database Backups** page lists only user databases from the currently active MySQL or MariaDB version. One, several, or all databases can be backed up; every database receives its own SQL dump under `data/backups/databases/`. Existing backups can be restored into an explicitly selected target database or deleted after confirmation.
+
+Database credentials are stored encrypted in the version-specific component settings and remain portable with the Drageon directory. Drageon uses the client tools supplied by the active database version. phpMyAdmin remains responsible for tables, SQL queries, users, permissions, collations, and structural changes.
 
 ## Portable PowerShell
 
@@ -183,10 +198,12 @@ Drageon/
 │  ├─ php/
 │  └─ phpmyadmin/
 ├─ data/
+│  ├─ backups/databases/
 │  ├─ cron/
 │  ├─ mail/
 │  ├─ mariadb/
-│  └─ mysql/
+│  ├─ mysql/
+│  └─ snapshots/
 └─ www/
 ```
 

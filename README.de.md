@@ -11,7 +11,7 @@
 
 [English](README.md) · **Deutsch**
 
-Drageon bündelt den kompletten lokalen Webentwicklungs-Stack in einer schlanken Windows-App. **Apache oder Nginx, PHP, MariaDB oder MySQL, phpMyAdmin, Composer, Node.js, cURL, Projekte, Virtual Hosts, Cronjobs, Testmails und Logs** lassen sich über eine gemeinsame Oberfläche verwalten.
+Drageon bündelt den kompletten lokalen Webentwicklungs-Stack in einer schlanken Windows-App. **Apache oder Nginx, PHP, MariaDB oder MySQL, phpMyAdmin, Composer, Node.js, cURL, Projekte, Virtual Hosts, Backups, Snapshots, Staging, Cronjobs, Testmails und Logs** lassen sich über eine gemeinsame Oberfläche verwalten.
 
 Programme, Projekte, Datenbanken und Einstellungen bleiben vollständig im Drageon-Ordner. Drageon benötigt keine Windows-Dienste, schreibt keine festen Installationspfade in die Registry und verändert den systemweiten `PATH` nicht.
 
@@ -26,11 +26,12 @@ Damit lässt sich die komplette Entwicklungsumgebung einfach kopieren, verschieb
 - **Mehrere Versionen parallel** – Komponenten lassen sich in verschiedenen Versionen installieren und bei Bedarf wechseln.
 - **Apache oder Nginx** – der Webserver kann passend zum Projekt gewählt werden.
 - **MariaDB oder MySQL** – beide Datenbank-Provider werden mit getrennten Datenverzeichnissen unterstützt.
+- **Backups und Snapshots** – SQL-Backups erstellen, Datenbanken wiederherstellen und vollständige Projektzustände vor riskanten Änderungen sichern.
 - **Portable Entwicklungs-Shell** – PowerShell erhält automatisch PHP und ausgewählte CLI-Werkzeuge.
 - **Projektfreundlich** – Ordner unter `www/` werden automatisch erkannt; Virtual Hosts sind optional.
 - **Praktische Entwicklerwerkzeuge** – Cron-Scheduler, SMTP-Catcher, zentrale Logs und Tray-Steuerung sind direkt integriert.
 - **Erweiterbar** – eigene Paketmanifeste können zusätzliche Werkzeuge und Releases bereitstellen.
-- **Mehrsprachig** – Deutsch, Englisch, Französisch, Spanisch und Italienisch sind bereits enthalten.
+- **Mehrsprachig** – Deutsch, Englisch, Französisch, Spanisch, Italienisch und brasilianisches Portugiesisch sind bereits enthalten.
 
 ## Schnellstart
 
@@ -65,7 +66,7 @@ Installierte Versionen liegen unter `bin/` und können direkt in der App aktivie
 
 ## Projekte und Virtual Hosts
 
-Ordner direkt unter `www/` werden automatisch erkannt. Drageon erkennt typische Projektstrukturen unter anderem für Contao/Symfony, Laravel, WordPress, Composer-/PHP-Projekte, Node-/Frontend-Projekte und statische HTML-Seiten.
+Ordner direkt unter `www/` sind die einzige Quelle für tatsächlich vorhandene Projekte und werden automatisch erkannt. Drageon erkennt typische Projektstrukturen unter anderem für Contao/Symfony, Laravel, WordPress, Composer-/PHP-Projekte, Node-/Frontend-Projekte und statische HTML-Seiten. Das Anlegen eines Ordners erzeugt keinen Konfigurationseintrag.
 
 Ohne zusätzliche Konfiguration ist beispielsweise
 
@@ -79,6 +80,10 @@ direkt erreichbar unter
 http://localhost/mein-projekt/
 ```
 
+`app/config/projects.json` enthält ausschließlich optionale Einstellungen für Projekte, die ausdrücklich konfiguriert wurden. Dazu können Anzeigename, Favoritenstatus, zugeordnete Datenbank, eigene URL, verknüpfter Virtual Host oder eine Staging-Beziehung gehören. Nicht mehr vorhandene Projektordner werden beim Einlesen aus dieser Metadatendatei entfernt.
+
+Einem Projekt kann eine vorhandene Benutzerdatenbank des aktiven MySQL- oder MariaDB-Servers zugeordnet werden. Diese Zuordnung ermöglicht datenbankgestützte Snapshots und Staging-Kopien; sie macht Drageon nicht zu einer allgemeinen Datenbankverwaltung. Ist eine zugeordnete Datenbank nicht mehr verfügbar, bleibt die Zuordnung sichtbar, bis sie bewusst geändert oder entfernt wird.
+
 Optional können Virtual Hosts direkt in Drageon angelegt werden:
 
 ```json
@@ -90,9 +95,19 @@ Optional können Virtual Hosts direkt in Drageon angelegt werden:
 }
 ```
 
-Dieselbe Virtual-Host-Definition kann von Apache und Nginx verwendet werden; serverspezifische Zusatzregeln bleiben getrennt konfigurierbar.
+Dieselbe Virtual-Host-Definition kann von Apache und Nginx verwendet werden; serverspezifische Zusatzregeln bleiben getrennt konfigurierbar. Ein Virtual Host kann optional einem erkannten Projekt zugeordnet werden. Umbenennen, Neuzuordnen oder Löschen des Hosts aktualisiert die Projektmetadaten, ohne das Projekt selbst anzulegen oder zu löschen.
+
+Über die Projektwerkzeuge lassen sich vollständige Snapshots unter `data/snapshots/` erstellen. Dateien, Dotfiles, leere Ordner, Symlinks, Verzeichnislinks und Junctions bleiben erhalten, ohne externe Link-Ziele zu kopieren. Eine zugeordnete Datenbank, Projektmetadaten und die relevante Virtual-Host-Definition werden einbezogen, sofern vorhanden. Vor einer Wiederherstellung kann der aktuelle Zustand automatisch als Sicherheitssnapshot gespeichert werden.
+
+Von Hauptprojekten können lokale Staging-Kopien erzeugt werden. Drageon kopiert den Projektbaum mit angepassten internen Link-Zielen und kann optional die zugeordnete Datenbank sowie einen Virtual Host kopieren. Für mehrere Instanzen werden nummerierte Vorschläge erzeugt. Projektdateien werden nicht verändert, um CMS-spezifische Datenbankzugänge einzutragen; nach einer Datenbankkopie muss die Verbindung im Staging deshalb manuell angepasst werden. Beim Löschen einer Staging-Instanz entfernt Drageon nach Bestätigung auch den erzeugten Virtual Host, die optionale Datenbank, Metadaten und alle zugehörigen Snapshots.
 
 ![Drageon Projektverwaltung](docs/images/projects-de.png)
+
+## Datenbank-Backups
+
+Die Seite **Datenbank-Backups** zeigt ausschließlich Benutzerdatenbanken der aktuell aktiven MySQL- oder MariaDB-Version. Eine, mehrere oder alle Datenbanken können gesichert werden; jede Datenbank erhält einen eigenen SQL-Dump unter `data/backups/databases/`. Vorhandene Backups lassen sich nach Bestätigung in eine ausdrücklich gewählte Zieldatenbank wiederherstellen oder löschen.
+
+Die Zugangsdaten werden verschlüsselt in den versionsbezogenen Komponenteneinstellungen gespeichert und bleiben zusammen mit dem Drageon-Ordner portabel. Drageon verwendet die Client-Werkzeuge der aktiven Datenbankversion. Tabellen, SQL-Abfragen, Benutzer, Rechte, Kollationen und Strukturänderungen bleiben Aufgabe von phpMyAdmin.
 
 ## Portable PowerShell
 
@@ -185,10 +200,12 @@ Drageon/
 │  ├─ php/
 │  └─ phpmyadmin/
 ├─ data/
+│  ├─ backups/databases/
 │  ├─ cron/
 │  ├─ mail/
 │  ├─ mariadb/
-│  └─ mysql/
+│  ├─ mysql/
+│  └─ snapshots/
 └─ www/
 ```
 

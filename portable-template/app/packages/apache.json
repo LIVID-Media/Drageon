@@ -4,6 +4,7 @@
   "description": "Stellt den lokalen Webserver f\u00FCr Projekte und Virtual Hosts bereit.",
   "category": "webserver",
   "bundled": true,
+  "exclusiveGroup": "server",
   "downloadPageUrl": "https://www.apachelounge.com/download/",
   "installDirectory": "apache",
   "addToPath": false,

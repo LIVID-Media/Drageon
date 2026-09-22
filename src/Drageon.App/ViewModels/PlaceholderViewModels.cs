@@ -12,7 +12,6 @@ public sealed class SettingsViewModel : ViewModelBase
     private string _fastCgiPort;
     private bool _startComponentsWithApp;
     private bool _closeToTrayOnWindowClose;
-    private bool _runMissedJobsOnStartup;
     private string _httpPort;
     private string _httpsPort;
     private string _smtpPort;
@@ -36,7 +35,6 @@ public sealed class SettingsViewModel : ViewModelBase
         _fastCgiPort = services.Settings.Current.FastCgiPort.ToString();
         _startComponentsWithApp = services.Settings.Current.StartComponentsWithApp;
         _closeToTrayOnWindowClose = services.Settings.Current.CloseToTrayOnWindowClose;
-        _runMissedJobsOnStartup = services.Settings.Current.RunMissedJobsOnStartup;
         _httpPort = services.Settings.Current.HttpPort.ToString(System.Globalization.CultureInfo.InvariantCulture);
         _httpsPort = services.Settings.Current.HttpsPort.ToString(System.Globalization.CultureInfo.InvariantCulture);
         _smtpPort = services.Settings.Current.SmtpPort.ToString(System.Globalization.CultureInfo.InvariantCulture);
@@ -72,7 +70,6 @@ public sealed class SettingsViewModel : ViewModelBase
     public string Language { get => _language; set => Set(ref _language, value); }
     public bool StartComponentsWithApp { get => _startComponentsWithApp; set => Set(ref _startComponentsWithApp, value); }
     public bool CloseToTrayOnWindowClose { get => _closeToTrayOnWindowClose; set => Set(ref _closeToTrayOnWindowClose, value); }
-    public bool RunMissedJobsOnStartup { get => _runMissedJobsOnStartup; set => Set(ref _runMissedJobsOnStartup, value); }
     public string HttpPort { get => _httpPort; set => Set(ref _httpPort, value); }
     public string HttpsPort { get => _httpsPort; set => Set(ref _httpsPort, value); }
     public string SmtpPort { get => _smtpPort; set => Set(ref _smtpPort, value); }
@@ -112,7 +109,6 @@ public sealed class SettingsViewModel : ViewModelBase
             FastCgiPort = fastCgi,
             StartComponentsWithApp = StartComponentsWithApp,
             CloseToTrayOnWindowClose = CloseToTrayOnWindowClose,
-            RunMissedJobsOnStartup = RunMissedJobsOnStartup,
             HttpPort = http,
             HttpsPort = https,
             SmtpPort = smtp,

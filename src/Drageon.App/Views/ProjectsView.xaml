@@ -31,13 +31,13 @@
                         <Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                         <Grid>
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="1.2*" />
-                                <ColumnDefinition Width="2.1*" />
-                                <ColumnDefinition Width="150" />
-                                <ColumnDefinition Width="120" />
+                                <ColumnDefinition Width="2.8*" />
+                                <ColumnDefinition Width="1.7*" />
+                                <ColumnDefinition Width="1.25*" />
+                                <ColumnDefinition Width="225" />
                             </Grid.ColumnDefinitions>
                             <TextBlock Text="{local:Loc Key=projects.column.project}" Style="{StaticResource TableHeaderText}" />
-                            <TextBlock Grid.Column="1" Text="{local:Loc Key=projects.column.url}" Style="{StaticResource TableHeaderText}" />
+                            <TextBlock Grid.Column="1" Text="{local:Loc Key=projects.column.database}" Style="{StaticResource TableHeaderText}" />
                             <TextBlock Grid.Column="2" Text="{local:Loc Key=projects.column.type}" Style="{StaticResource TableHeaderText}" />
                             <TextBlock Grid.Column="3" Text="{local:Loc Key=projects.column.action}" Style="{StaticResource TableHeaderText}" Margin="3,0,0,0" />
                         </Grid>
@@ -50,34 +50,46 @@
                     <ItemsControl ItemsSource="{Binding Projects}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                                <Border Style="{StaticResource ProjectTableRow}">
+                                <Border>
+                                    <Border.Style>
+                                        <Style TargetType="Border" BasedOn="{StaticResource ProjectTableRow}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsStaging}" Value="True"><Setter Property="Background" Value="{StaticResource InputBrush}"/></DataTrigger>
+                                                <MultiDataTrigger>
+                                                    <MultiDataTrigger.Conditions><Condition Binding="{Binding IsStaging}" Value="True"/><Condition Binding="{Binding IsMouseOver, RelativeSource={RelativeSource Self}}" Value="True"/></MultiDataTrigger.Conditions>
+                                                    <Setter Property="Background" Value="{StaticResource SurfaceHoverBrush}"/>
+                                                </MultiDataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
                                     <Grid>
                                         <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="1.2*" />
-                                            <ColumnDefinition Width="2.1*" />
-                                            <ColumnDefinition Width="150" />
-                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="2.8*" />
+                                            <ColumnDefinition Width="1.7*" />
+                                            <ColumnDefinition Width="1.25*" />
+                                            <ColumnDefinition Width="225" />
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="0,0,12,0" />
-                                        <TextBlock Grid.Column="1" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="0,0,12,0" ToolTip="{Binding UrlToolTip}">
-                                                    <Hyperlink Command="{Binding DataContext.OpenProjectCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                               CommandParameter="{Binding}">
-                                                        <Run Text="{Binding Url, Mode=OneWay}" />
-                                                    </Hyperlink>
-                                        </TextBlock>
+                                        <StackPanel VerticalAlignment="Center" Margin="{Binding ProjectIndent}">
+                                            <TextBlock FontWeight="SemiBold" TextTrimming="CharacterEllipsis"><Run Text="{Binding HierarchyPrefix, Mode=OneWay}"/><Run Text="{Binding Name, Mode=OneWay}"/></TextBlock>
+                                            <TextBlock TextTrimming="CharacterEllipsis" ToolTip="{Binding UrlToolTip}">
+                                                <Hyperlink Command="{Binding DataContext.OpenProjectCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                           CommandParameter="{Binding}">
+                                                    <Run Text="{Binding Url, Mode=OneWay}" />
+                                                </Hyperlink>
+                                            </TextBlock>
+                                            <TextBlock Text="{Binding SnapshotStagingSummary}" Style="{StaticResource MutedText}" FontSize="12" TextTrimming="CharacterEllipsis" />
+                                        </StackPanel>
+                                        <TextBlock Grid.Column="1" Text="{Binding DatabaseLabel}" ToolTip="{Binding DatabaseToolTip}"
+                                                   Visibility="{Binding DatabaseVisibility}" VerticalAlignment="Center"
+                                                   TextTrimming="CharacterEllipsis" Margin="0,0,12,0" />
                                         <TextBlock Grid.Column="2" Text="{Binding Type}" VerticalAlignment="Center"
                                                    TextTrimming="CharacterEllipsis" ToolTip="{Binding Technologies}" Margin="0,0,12,0" />
-                                        <StackPanel Grid.Column="3" Orientation="Horizontal" HorizontalAlignment="Center">
-                                            <Button Content="&#xE838;" ToolTip="{local:Loc Key=projects.action.openFolder}"
-                                                    Command="{Binding DataContext.OpenFolderCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                    CommandParameter="{Binding}" Style="{StaticResource IconButton}" Margin="0,0,6,0" />
-                                            <Button Content="&#xE756;" ToolTip="{local:Loc Key=projects.action.openPowerShell}"
-                                                    Command="{Binding DataContext.OpenPowerShellCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                    CommandParameter="{Binding}" Style="{StaticResource IconButton}" Margin="0,0,6,0" />
-                                            <Button Content="{Binding FavoriteGlyph}" ToolTip="{Binding FavoriteToolTip}"
-                                                    Command="{Binding DataContext.ToggleFavoriteCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                    CommandParameter="{Binding}"
-                                                    Style="{StaticResource FavoriteButton}" />
+                                        <StackPanel Grid.Column="3" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                <Button Content="&#xE82E;" ToolTip="{local:Loc Key=projects.database.assign}" Command="{Binding DataContext.AssignDatabaseCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" Style="{StaticResource IconButton}" Margin="0,0,6,0"/>
+                                                <Button Content="&#xE72D;" ToolTip="{local:Loc Key=projects.tools.open}" Command="{Binding DataContext.OpenProjectToolsCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" Style="{StaticResource IconButton}" Margin="0,0,6,0"/>
+                                                <Button Content="&#xE838;" ToolTip="{local:Loc Key=projects.action.openFolder}" Command="{Binding DataContext.OpenFolderCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" Style="{StaticResource IconButton}" Margin="0,0,6,0" />
+                                                <Button Content="&#xE756;" ToolTip="{local:Loc Key=projects.action.openPowerShell}" Command="{Binding DataContext.OpenPowerShellCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" Style="{StaticResource IconButton}" Margin="0,0,6,0" />
+                                                <Button Content="{Binding FavoriteGlyph}" ToolTip="{Binding FavoriteToolTip}" Command="{Binding DataContext.ToggleFavoriteCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" Style="{StaticResource FavoriteButton}" />
                                         </StackPanel>
                                     </Grid>
                                 </Border>

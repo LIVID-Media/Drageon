@@ -11,6 +11,7 @@
         <DataTemplate DataType="{x:Type vm:DashboardViewModel}"><views:DashboardView /></DataTemplate>
         <DataTemplate DataType="{x:Type vm:PackagesViewModel}"><views:PackagesView /></DataTemplate>
         <DataTemplate DataType="{x:Type vm:ProjectsViewModel}"><views:ProjectsView /></DataTemplate>
+        <DataTemplate DataType="{x:Type vm:BackupsViewModel}"><views:BackupsView /></DataTemplate>
         <DataTemplate DataType="{x:Type vm:VHostsViewModel}"><views:VHostsView /></DataTemplate>
         <DataTemplate DataType="{x:Type vm:CronJobsViewModel}"><views:CronJobsView /></DataTemplate>
         <DataTemplate DataType="{x:Type vm:MailViewModel}"><views:MailView /></DataTemplate>

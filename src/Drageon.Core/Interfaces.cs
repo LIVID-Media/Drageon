@@ -50,6 +50,7 @@ public interface IConfigGenerator
 
 public interface IRuntimeController
 {
+    event EventHandler? WebServerStarted;
     Task StartAsync(string componentId, CancellationToken cancellationToken = default);
     Task StopAsync(string componentId, CancellationToken cancellationToken = default);
     Task StartAllAsync(CancellationToken cancellationToken = default);
@@ -78,6 +79,37 @@ public interface IProjectDiscoveryService
 {
     Task<IReadOnlyList<LocalProject>> GetProjectsAsync(CancellationToken cancellationToken = default);
     Task SetFavoriteAsync(string projectId, bool isFavorite, CancellationToken cancellationToken = default);
+    Task SetNameAsync(string projectPath, string? projectName, CancellationToken cancellationToken = default);
+    Task SetDatabaseAsync(string projectPath, string? databaseName, CancellationToken cancellationToken = default);
+    Task SetVirtualHostAsync(string projectPath, string? virtualHost, CancellationToken cancellationToken = default);
+    Task<ProjectMetadata?> GetMetadataAsync(string projectPath, CancellationToken cancellationToken = default);
+    Task SetMetadataAsync(string projectPath, ProjectMetadata metadata, CancellationToken cancellationToken = default);
+}
+
+public interface IDatabaseBackupService
+{
+    Task<DatabaseServerInfo> GetActiveServerAsync(DatabaseConnection? connection = null, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<string>> GetDatabasesAsync(DatabaseConnection? connection = null, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<DatabaseBackupInfo>> GetBackupsAsync(CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<DatabaseBackupInfo>> BackupAsync(IEnumerable<string> databaseNames, DatabaseConnection? connection = null, IProgress<string>? progress = null, CancellationToken cancellationToken = default);
+    Task RestoreAsync(string backupPath, string targetDatabase, DatabaseConnection? connection = null, IProgress<string>? progress = null, CancellationToken cancellationToken = default);
+    Task DeleteBackupAsync(string backupPath, CancellationToken cancellationToken = default);
+    Task CreateDatabaseFromAsync(string sourceDatabase, string targetDatabase, DatabaseConnection? connection = null, CancellationToken cancellationToken = default);
+    Task DropDatabaseAsync(string databaseName, DatabaseConnection? connection = null, CancellationToken cancellationToken = default);
+}
+
+public interface IProjectSnapshotService
+{
+    Task<IReadOnlyList<ProjectSnapshotInfo>> GetProjectSnapshotsAsync(string projectPath, CancellationToken cancellationToken = default);
+    Task<ProjectSnapshotInfo> CreateProjectSnapshotAsync(string projectPath, string description, DatabaseConnection? connection = null, IProgress<string>? progress = null, CancellationToken cancellationToken = default);
+    Task RestoreProjectSnapshotAsync(string snapshotDirectory, bool backupCurrentState = true, DatabaseConnection? connection = null, IProgress<string>? progress = null, CancellationToken cancellationToken = default);
+    Task DeleteProjectSnapshotAsync(string snapshotDirectory, CancellationToken cancellationToken = default);
+}
+
+public interface IStagingService
+{
+    Task<StagingResult> CreateAsync(StagingRequest request, DatabaseConnection? connection = null, IProgress<string>? progress = null, CancellationToken cancellationToken = default);
+    Task DeleteAsync(string stagingProjectPath, bool deleteDatabase, DatabaseConnection? connection = null, CancellationToken cancellationToken = default);
 }
 
 public interface IAppLogService
@@ -93,6 +125,7 @@ public interface ICronScheduler : IAsyncDisposable
     event EventHandler<CronJobRunResult>? JobFinished;
     bool IsRunning { get; }
     Task StartAsync(CancellationToken cancellationToken = default);
+    Task RunMissedJobsAsync(CancellationToken cancellationToken = default);
     Task ReloadAsync(CancellationToken cancellationToken = default);
     Task RunNowAsync(Guid jobId, CancellationToken cancellationToken = default);
 }

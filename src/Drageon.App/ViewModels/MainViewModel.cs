@@ -16,6 +16,7 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
             new("dashboard", services.Language.Get("nav.dashboard"), "\uE80F", () => new DashboardViewModel(services)),
             new("components", services.Language.Get("nav.components"), "\uE71D", () => new PackagesViewModel(services)),
             new("projects", services.Language.Get("nav.projects"), "\uE8B7", () => new ProjectsViewModel(services)),
+            new("backups", services.Language.Get("nav.backups"), "\uEA35", () => new BackupsViewModel(services)),
             new("vhosts", services.Language.Get("nav.vhosts"), "\uE774", () => new VHostsViewModel(services)),
             new("cron", services.Language.Get("nav.cron"), "\uE823", () => new CronJobsViewModel(services)),
             new("mail", services.Language.Get("nav.mail"), "\uE715", () => new MailViewModel(services)),
@@ -68,7 +69,7 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
             _ => null
         };
         if (item is null) return;
-        if (ReferenceEquals(item, SelectedItem))
+        if (ReferenceEquals(item, SelectedItem) && item.IsActive)
         {
             if (CurrentPage is IRefreshable current) _ = current.RefreshAsync();
             return;

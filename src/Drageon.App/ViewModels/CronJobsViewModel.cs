@@ -122,7 +122,9 @@ public sealed class CronJobsViewModel : ViewModelBase, IRefreshable, IDisposable
         var jobs = await ReadJobsAsync();
         var previous = _editingId;
         Jobs.Clear();
-        foreach (var job in jobs.OrderBy(static item => item.Name)) Jobs.Add(new CronJobItemViewModel(job));
+        foreach (var job in jobs.OrderByDescending(static item => item.LastRunAt)
+                     .ThenBy(static item => item.Name, StringComparer.CurrentCultureIgnoreCase))
+            Jobs.Add(new CronJobItemViewModel(job));
         SelectedJob = previous is null ? Jobs.FirstOrDefault() : Jobs.FirstOrDefault(item => item.Job.Id == previous) ?? Jobs.FirstOrDefault();
     }
 

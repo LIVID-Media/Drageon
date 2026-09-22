@@ -14,6 +14,7 @@ public sealed class RuntimeController(
 {
     private readonly IReadOnlyDictionary<string, IConfigGenerator> _generators = generators.ToDictionary(static item => item.ComponentId);
     private readonly SemaphoreSlim _webServerGate = new(1, 1);
+    public event EventHandler? WebServerStarted;
     private async Task<string> SelectedWebServerAsync(CancellationToken token) =>
         (await store.ReadAsync<AppSettings>(paths.Resolve("app", "config", "settings.json"), token) ?? new()).WebServer;
 
@@ -30,6 +31,7 @@ public sealed class RuntimeController(
                 foreach (var other in webServers.All.Where(server => server.Id != componentId))
                     await other.StopAsync(cancellationToken).ConfigureAwait(false);
                 await webServer.StartAsync(cancellationToken).ConfigureAwait(false);
+                WebServerStarted?.Invoke(this, EventArgs.Empty);
             }
             finally { _webServerGate.Release(); }
             return;
@@ -245,9 +247,8 @@ public sealed class RuntimeController(
         }
         catch (InvalidOperationException)
         {
-            // Ein gesetztes Root-Passwort ist üblich, wird von Drageon aber bewusst nicht gespeichert.
-            // In diesem Fall übernimmt der Prozessmanager das lokale Beenden ohne irreführende
-            // Zugangsdaten- oder SSL-Warnungen in der Serveransicht.
+            // Falls der direkte Admin-Aufruf keine Anmeldung erhält, übernimmt der Prozessmanager
+            // das lokale Beenden. Zugangsdaten werden an dieser Stelle nie als Argument übergeben.
             return false;
         }
     }

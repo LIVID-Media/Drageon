@@ -27,6 +27,7 @@ public sealed class MailViewModel : ViewModelBase, IRefreshable, IDisposable
         RefreshCommand = new AsyncRelayCommand(_ => RefreshAsync());
         StartStopCommand = new AsyncRelayCommand(_ => StartStopAsync());
         ClearCommand = new AsyncRelayCommand(_ => ClearAsync());
+        DeleteMessageCommand = new AsyncRelayCommand(_ => DeleteMessageAsync(), _ => SelectedMessage is not null);
         OpenAttachmentsCommand = new RelayCommand(_ => OpenAttachments());
         _services.Mail.MessageReceived += OnMessageReceived;
         _ = RefreshAsync();
@@ -38,6 +39,7 @@ public sealed class MailViewModel : ViewModelBase, IRefreshable, IDisposable
     public AsyncRelayCommand RefreshCommand { get; }
     public AsyncRelayCommand StartStopCommand { get; }
     public AsyncRelayCommand ClearCommand { get; }
+    public AsyncRelayCommand DeleteMessageCommand { get; }
     public RelayCommand OpenAttachmentsCommand { get; }
     public string MailDirectory => _services.Paths.Resolve("data", "mail");
     public bool IsRunning => _services.Mail.IsRunning;
@@ -54,6 +56,7 @@ public sealed class MailViewModel : ViewModelBase, IRefreshable, IDisposable
         {
             if (!Set(ref _selectedMessage, value)) return;
             UpdateMessageDetails();
+            DeleteMessageCommand.RaiseCanExecuteChanged();
         }
     }
 
@@ -123,6 +126,27 @@ public sealed class MailViewModel : ViewModelBase, IRefreshable, IDisposable
         }
         await RefreshAsync();
         Status = T("mail.status.cleared");
+    }
+
+    private async Task DeleteMessageAsync()
+    {
+        if (SelectedMessage is not { } selected) return;
+        var result = System.Windows.MessageBox.Show(
+            TF("mail.confirm.delete", selected.Subject), T("mail.action.delete"),
+            System.Windows.MessageBoxButton.YesNo, System.Windows.MessageBoxImage.Warning);
+        if (result != System.Windows.MessageBoxResult.Yes) return;
+
+        try
+        {
+            var directory = _services.Paths.Resolve("data", "mail", selected.Message.Id.ToString("N"));
+            if (Directory.Exists(directory)) Directory.Delete(directory, true);
+            await RefreshAsync();
+            Status = T("mail.status.deleted");
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            Status = TF("mail.status.deleteFailed", exception.Message);
+        }
     }
 
     private void UpdateMessageDetails()

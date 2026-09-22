@@ -32,6 +32,28 @@
             <Border Style="{StaticResource Card}" Margin="0,0,0,12">
                 <Expander>
                     <Expander.Header>
+                        <TextBlock Text="{Binding BackupsTitle}" FontSize="18" FontWeight="SemiBold"/>
+                    </Expander.Header>
+                    <StackPanel Margin="0,12,0,0">
+                        <TextBlock Text="{Binding BackupsText}" TextWrapping="Wrap"/>
+                        <TextBlock Text="{Binding BackupsHint}" TextWrapping="Wrap" Foreground="{StaticResource MutedTextBrush}" Margin="0,8,0,0"/>
+                    </StackPanel>
+                </Expander>
+            </Border>
+            <Border Style="{StaticResource Card}" Margin="0,0,0,12">
+                <Expander>
+                    <Expander.Header>
+                        <TextBlock Text="{Binding ProjectsTitle}" FontSize="18" FontWeight="SemiBold"/>
+                    </Expander.Header>
+                    <StackPanel Margin="0,12,0,0">
+                        <TextBlock Text="{Binding ProjectsText}" TextWrapping="Wrap"/>
+                        <TextBlock Text="{Binding ProjectsHint}" TextWrapping="Wrap" Foreground="{StaticResource MutedTextBrush}" Margin="0,8,0,0"/>
+                    </StackPanel>
+                </Expander>
+            </Border>
+            <Border Style="{StaticResource Card}" Margin="0,0,0,12">
+                <Expander>
+                    <Expander.Header>
                         <TextBlock Text="{Binding VHostsTitle}" FontSize="18" FontWeight="SemiBold"/>
                     </Expander.Header>
                     <StackPanel Margin="0,12,0,0">
