@@ -68,56 +68,14 @@ Installed versions live under `bin/` and can be activated, switched or removed f
 
 ## Projects and virtual hosts
 
-Folders directly below `www/` are the sole source of existing projects and are detected automatically. Drageon recognizes common project types including Contao/Symfony, Laravel, WordPress, Composer/PHP projects, Node/frontend projects and static HTML sites. Adding a folder does not create a configuration entry.
+Drageon automatically detects projects in `www/`. For example, `www/my-project/` is available at `http://localhost/my-project/`. Projects can have a display name, favorite status, and an assigned database.
 
-Without any additional configuration, a folder such as
+Virtual hosts provide local domains such as `website.localhost` and can point to a project's public folder. The same definitions work with Apache and Nginx.
 
-```text
-www/my-project/
-```
+Project snapshots save files and, optionally, the assigned database and virtual host for later restoration. Symbolic links and junctions are preserved. Before restoring, the current state can be saved as an additional snapshot.
 
-is available through
+Staging creates a separate local copy for testing, optionally with its own database and virtual host. The application's database connection must be adjusted manually. Deleting a staging instance removes its files, snapshots, and resources created for that instance.
 
-```text
-http://localhost/my-project/
-```
-
-`app/config/projects.json` contains optional settings only for projects that were configured explicitly. These settings can include a display name, favorite state, assigned database, custom URL, associated virtual host, or staging relationship. Metadata for missing project folders is retained so scans do not treat temporary exchange/recovery windows as deletion. Explicit staging deletion removes its metadata.
-
-An existing user database from the active MySQL or MariaDB server can be assigned to a project. The assignment enables database-aware snapshots and staging; it does not turn Drageon into a general database manager. If an assigned database is no longer available, Drageon keeps the assignment visible until it is deliberately changed or removed.
-
-Optional virtual hosts can be created directly in Drageon, for example:
-
-```json
-{
-  "host": "website.localhost",
-  "documentRoot": "www/website/public",
-  "enabled": true,
-  "port": 80
-}
-```
-
-The same virtual-host definition can be used by Apache and Nginx, with separate advanced configuration where needed. A virtual host can optionally be linked to a detected project; renaming, reassigning, or deleting the host updates the project metadata without creating or deleting the project itself.
-
-The project tools can create complete snapshots under `data/snapshots/`. They preserve files, dotfiles, empty directories, symbolic links, directory links, and junctions without copying linked external content. An assigned database, project metadata, and relevant virtual-host definition are included when available. Restoring a snapshot can first preserve the current state as a safety snapshot.
-
-Local staging copies can be created from main projects. Drageon copies the project tree with link-aware paths and can optionally copy the assigned database and create a virtual host. Multiple instances receive numbered suggestions. Project files are never modified to inject CMS-specific database settings, so the staging database connection must be updated manually after a database copy. Staging deletion checks a separate creation record, directory identity, VHost checksum, project ownership and other references. Unclear, foreign, repurposed or shared resources cause an abort before changes. The owned staging database is also deleted when its original assignment and the Windows identities recorded at exclusive creation for server storage, system schema and staging schema are unchanged. A recovery SQL dump is captured before deletion; shared references, another server or a replaced database abort before changes. This is supported only for local servers with data directories within this Drageon instance and database names containing ASCII letters, digits and underscores. Older instances without database creation proof cannot be deleted automatically. After reversible project relocation, project cleanup precedes removal of the proven owned VHost and metadata; snapshots are moved to the recovery folder last. Files, SQL dump, VHost, metadata and snapshots remain available during deletion for recovery. After successful deletion, these temporary recovery copies, snapshots, ownership records and completed operation files are removed. The confirmation explains permanent deletion; failures retain required recovery data. Successful staging creation also removes its operation files.
-
-### Safety and recovery
-
-New database backups and snapshot folders use a timestamp including seconds and milliseconds separated by underscores, without a random identifier. Existing backups keep their names.
-
-New snapshots use format 3: `files.zip` stores regular files and link entries carrying target text (without target contents), `files.index.json` stores a compact index and `snapshot.json` contains only the small listing header. Sizes and SHA-256 checksums protect files, archive, index and SQL dump. File contents stream through a 128 KiB buffer; the ZIP directory and index use memory proportional to entry count, not payload size. Compression uses the fast level. Symbolic links, directory links and junctions retain their type and target in the index and are explicitly recreated; ordinary ZIP extraction cannot reliably restore Windows links. Earlier format-3 archives with index-only links remain readable. Staging creation uses the same mechanism with an uncompressed temporary ZIP; new staging deletion recovery data is compressed. Format 2 loose-file snapshots remain readable. The actual snapshot location determines its address; manifest addresses never select deletion targets. Absolute entry paths, traversal, invalid names, unknown types, missing link targets, duplicate paths and link/descendant conflicts are rejected. Snapshot sources and their ancestors cannot contain unexpected reparse points. Legacy snapshots without a version remain readable after path and completeness checks; missing historical checksums cannot provide a retrospective integrity guarantee. Empty projects remain supported. Legacy staging metadata without a separate creation record never grants automatic deletion ownership.
-
-File restoration prepares the entire tree in a unique sibling directory. Before the first rename, an operation journal is written with `WriteThrough` and `Flush(true)`. The previous folder is then moved to `<project>.previous-<ID>` and the prepared tree installed. Internal links point at the final project path; external targets are neither copied nor cleaned. Preparation failure leaves the project unchanged; exchange failure attempts rollback independently of the cancelled user token. Failed rollback retains the previous tree and journal and reports their paths. This protection also applies with the optional safety snapshot disabled. After successful restoration, the previous tree and both journals are archived in `data/recovery/restore-<ID>/`, leaving no operation artifacts in `www`. Simple staging creation into an absent target removes its completed file journal; combined restores retain their recovery state.
-
-Combined restoration restores files, the snapshot database, the project-owned VHost and metadata. Conflicts and expected SQL dumps are checked before existing resources change. The full new file tree is prepared first; the actual existing target database is backed up independently of the project folder or its current database assignment. An additional current-project snapshot is optional and does not replace this mandatory recovery path. New snapshots receive an independent creation receipt proving their historical database assignment; older snapshots without this receipt require the target database to remain assigned to the project. Foreign, reassigned or shared VHosts and shared target databases abort before mutations. Automatic combined database restoration requires a local server, an unlinked data directory within Drageon and an ASCII letters/digits/underscore schema name, so actual server storage and schema incarnation can be verified during compensation. Unsupported combinations abort before mutations with a concrete reason.
-
-Import, exchange or later failures attempt to recover database, files, VHost and metadata without the cancelled user token. No overall atomicity is claimed. Durable state at `<project>.restore-operation-<ID>.json` and backups in `data/recovery/restore-<ID>/` enable resumable compensation; during the operation the previous tree is at `<project>.previous-<ID>`, then archived at `data/recovery/restore-<ID>/files.before`. Archived coordinator and file journals are named `restore.operation.json` and `files.operation.json`. `RecoverProjectRestoreAsync` accepts either coordinator location and can recover interrupted archival. Cleanup failure after completion reports a completed restore with retained artifacts. Failed compensation explicitly reports required manual recovery and backup paths. External SQL clients and filesystem writers must remain quiescent during the operation. Database copying uses exclusive `CREATE DATABASE` without a preceding `DROP`; incomplete copies retain their source dump and journal for review.
-
-Snapshot/staging mutations, metadata assignments and VHost changes are serialized in the services; database service instances share another gate. Confirmation dialogs show a fresh plan containing paths, target database, VHosts, information and snapshot list. Services recheck the plan; changes require confirmation again. Web server restart failure is reported separately from a completed operation. The app already prevents concurrent instances for the same portable directory. Other SQL clients and external filesystem changes do not participate in these gates; restore a quiescent project. No overall atomicity is claimed across files, SQL, VHosts and metadata.
-
-After a process interruption, inspect the reported journal and preserve recovery artifacts first. Service APIs `RecoverFileExchangeAsync(journal, expectedProjectPath)`, `RecoverDeletionAsync(journal, expectedProjectPath)` as well as `RecoverProjectRestoreAsync(journal, expectedProjectPath, connection)` and `RecoverDatabaseAsync(journal, expectedDatabase, connection)` validate expected resources and perform their recovery paths. Existing foreign targets and VHost conflicts are preserved and cause an abort. Partially deleted staging files are retained in `<project>.recovery-<ID>/files.zip` (legacy recovery data: `files/`), with the entry manifest, metadata and VHost alongside and relocated snapshots in `snapshots/`; a partial tree may remain under `<project>.delete-<ID>`. Failed recovery requires manual review of these paths. Remove recovery artifacts explicitly only after checking the result. Actual power loss, full disks and concurrent external programs are not protected by an overall transaction.
 ![Drageon project management](docs/images/projects-en.png)
 
 ## Database backups
