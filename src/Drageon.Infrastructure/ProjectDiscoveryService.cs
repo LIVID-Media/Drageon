@@ -41,6 +41,7 @@ public sealed class ProjectDiscoveryService(
         foreach (var directory in Directory.EnumerateDirectories(wwwRoot).OrderBy(Path.GetFileName, StringComparer.CurrentCultureIgnoreCase))
         {
             cancellationToken.ThrowIfCancellationRequested();
+            if (OperationSafety.IsOperationDirectory(directory) || new DirectoryInfo(directory).LinkTarget is not null) continue;
             var name = Path.GetFileName(directory);
             if (string.IsNullOrWhiteSpace(name) || name.StartsWith('.')) continue;
 
@@ -176,5 +177,3 @@ public sealed class ProjectDiscoveryService(
         }
     }
 }
-
-

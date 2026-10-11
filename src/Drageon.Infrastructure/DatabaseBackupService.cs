@@ -5,11 +5,24 @@ using Drageon.Core;
 
 namespace Drageon.Infrastructure;
 
-public sealed class DatabaseBackupService(IPortablePathService paths, JsonFileStore store, IAppLogService logs) : IDatabaseBackupService
+public sealed partial class DatabaseBackupService(IPortablePathService paths, JsonFileStore store, IAppLogService logs) : IDatabaseBackupService
 {
     private static readonly HashSet<string> SystemDatabases = new(StringComparer.OrdinalIgnoreCase)
         { "information_schema", "performance_schema", "mysql", "sys" };
-    private readonly SemaphoreSlim _operationGate = new(1, 1);
+    private static readonly SemaphoreSlim _operationGate = new(1, 1);
+
+    internal async Task<string> GetInstanceIdentityAsync(DatabaseServerInfo server, CancellationToken cancellationToken)
+    {
+        var identity = (await RunClientQueryAsync(server, "SELECT @@hostname, @@datadir, @@port, @@server_id, @@version;", cancellationToken).ConfigureAwait(false)).Trim();
+        if (string.IsNullOrWhiteSpace(identity)) throw new InvalidOperationException("Serverinstanz konnte nicht identifiziert werden; unverändert abgebrochen.");
+        if (server.ComponentId == "mysql" && !identity.Split('\t').Last().Contains("MariaDB", StringComparison.OrdinalIgnoreCase))
+        {
+            var uuid = (await RunClientQueryAsync(server, "SELECT @@server_uuid;", cancellationToken).ConfigureAwait(false)).Trim();
+            if (string.IsNullOrWhiteSpace(uuid)) throw new InvalidOperationException("MySQL-Server-UUID fehlt; unverändert abgebrochen.");
+            identity += "|" + uuid;
+        }
+        return $"{server.ComponentId}|{server.ClientPath}|{server.Connection.Host}:{server.Connection.Port}|{identity}";
+    }
 
     public async Task<DatabaseServerInfo> GetActiveServerAsync(DatabaseConnection? connection = null, CancellationToken cancellationToken = default)
     {
@@ -67,6 +80,7 @@ public sealed class DatabaseBackupService(IPortablePathService paths, JsonFileSt
     public Task<IReadOnlyList<DatabaseBackupInfo>> GetBackupsAsync(CancellationToken cancellationToken = default)
     {
         var directory = paths.Resolve("data", "backups", "databases");
+        OperationSafety.NoLinks(directory);
         Directory.CreateDirectory(directory);
         IReadOnlyList<DatabaseBackupInfo> result = Directory.EnumerateFiles(directory, "*.sql")
             .Select(path => new FileInfo(path)).Select(file => new DatabaseBackupInfo(file.FullName, ParseDatabaseName(file.Name), file.LastWriteTime, file.Length))
@@ -79,7 +93,7 @@ public sealed class DatabaseBackupService(IPortablePathService paths, JsonFileSt
         var names = databaseNames.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
         if (names.Length == 0) return [];
         var server = await GetActiveServerAsync(connection, cancellationToken).ConfigureAwait(false);
-        var timestamp = DateTime.Now.ToString("yyyy-MM-dd_HHmmss", CultureInfo.InvariantCulture);
+        var timestamp = DateTime.Now.ToString("yyyy-MM-dd_HHmmss_fff", CultureInfo.InvariantCulture);
         var output = new List<DatabaseBackupInfo>();
         foreach (var name in names)
         {
@@ -93,7 +107,7 @@ public sealed class DatabaseBackupService(IPortablePathService paths, JsonFileSt
         return output;
     }
 
-    public async Task RestoreAsync(string backupPath, string targetDatabase, DatabaseConnection? connection = null, IProgress<string>? progress = null, CancellationToken cancellationToken = default)
+    public async Task RestoreAsync(string backupPath, string targetDatabase, DatabaseConnection? connection = null, IProgress<string>? progress = null, CancellationToken cancellationToken = default, string? confirmedPlan = null)
     {
         ValidateDatabaseName(targetDatabase);
         var fullBackup = ValidateSqlPath(backupPath);
@@ -102,27 +116,96 @@ public sealed class DatabaseBackupService(IPortablePathService paths, JsonFileSt
         await _operationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await RunClientQueryAsync(server, $"DROP DATABASE IF EXISTS {QuoteIdentifier(targetDatabase)}; CREATE DATABASE {QuoteIdentifier(targetDatabase)} CHARACTER SET utf8mb4;", cancellationToken).ConfigureAwait(false);
-            await ImportFromPathCoreAsync(server, targetDatabase, fullBackup, cancellationToken).ConfigureAwait(false);
+            if (confirmedPlan is not null) ProjectSnapshotService.CheckPlan(confirmedPlan, await GetRestorePlanAsync(backupPath, targetDatabase, connection, cancellationToken).ConfigureAwait(false));
+            if (await GetActiveServerAsync(connection, cancellationToken).ConfigureAwait(false) != server) throw new IOException("Unverändert abgebrochen: Aktive Serverkonfiguration wurde geändert.");
+            var existing = (await RunClientQueryAsync(server, "SHOW DATABASES;", cancellationToken).ConfigureAwait(false))
+                .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Contains(targetDatabase, StringComparer.OrdinalIgnoreCase);
+            var recovery = paths.Resolve("data", "backups", "databases", $"{targetDatabase}_recovery_{Guid.NewGuid():N}.sql");
+            var identity = await GetInstanceIdentityAsync(server, cancellationToken).ConfigureAwait(false);
+            var charset = "utf8mb4"; string? collation = null;
+            if (existing)
+            {
+                var schema = await RunClientQueryAsync(server, $"SELECT DEFAULT_CHARACTER_SET_NAME, DEFAULT_COLLATION_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME='{EscapeLiteral(targetDatabase)}';", cancellationToken).ConfigureAwait(false);
+                var fields = schema.Split(['\t', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                if (fields.Length != 2) throw new InvalidDataException("Schema-Eigenschaften fehlen; unverändert abgebrochen.");
+                charset = fields[0]; collation = fields[1]; ValidateSqlToken(charset); ValidateSqlToken(collation);
+            }
+            var input = recovery + ".input.sql";
+            File.Copy(fullBackup, input, false);
+            if (existing) await DumpToPathCoreAsync(server, targetDatabase, recovery, cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+            var journal = recovery + ".operation.json";
+            var state = new DatabaseRecovery(targetDatabase, identity, existing ? recovery : null, "before-replace", charset, collation, existing ? OperationSafety.Hash(recovery) : null, input);
+            OperationSafety.Persist(journal, state);
+            var mutated = false;
+            try
+            {
+                // Once a destructive command starts, complete it without the user token; cancellation
+                // is observed immediately afterwards, then compensated using an independent token.
+                mutated = existing;
+                await RunClientQueryAsync(server, (existing ? $"DROP DATABASE {QuoteIdentifier(targetDatabase)}; " : "") + $"CREATE DATABASE {QuoteIdentifier(targetDatabase)} CHARACTER SET {charset}" + (collation is null ? ";" : $" COLLATE {collation};"), CancellationToken.None).ConfigureAwait(false);
+                mutated = true;
+                cancellationToken.ThrowIfCancellationRequested();
+                await ImportFromPathCoreAsync(server, targetDatabase, input, cancellationToken).ConfigureAwait(false);
+                cancellationToken.ThrowIfCancellationRequested();
+                OperationSafety.Persist(journal, state with { Phase = "completed" });
+            }
+            catch (Exception original)
+            {
+                try
+                {
+                    if (mutated)
+                    {
+                        if (await GetInstanceIdentityAsync(server, CancellationToken.None).ConfigureAwait(false) != identity) throw new IOException("Serverinstanz wurde geändert; keine automatische Kompensation.");
+                        await RunClientQueryAsync(server, $"DROP DATABASE IF EXISTS {QuoteIdentifier(targetDatabase)};" + (existing ? $" CREATE DATABASE {QuoteIdentifier(targetDatabase)} CHARACTER SET {charset}" + (collation is null ? ";" : $" COLLATE {collation};") : ""), CancellationToken.None).ConfigureAwait(false);
+                        if (existing) await ImportFromPathCoreAsync(server, targetDatabase, recovery, CancellationToken.None).ConfigureAwait(false);
+                    }
+                    OperationSafety.Persist(journal, state with { Phase = "rolled-back" });
+                }
+                catch (Exception compensation)
+                {
+                    throw new RecoveryOperationException(RecoveryOutcome.ManualRecoveryRequired, $"Manuelle Wiederherstellung erforderlich: {recovery}; {journal}. {original.Message}; Kompensation: {compensation.Message}", original);
+                }
+                throw new RecoveryOperationException(mutated ? RecoveryOutcome.RolledBack : RecoveryOutcome.Unchanged, $"{(mutated ? "Erfolgreich zurückgerollt" : "Unverändert abgebrochen")}: {original.Message}. Sicherung: {recovery}", original);
+            }
             logs.Write("Database", $"{targetDatabase} aus {Path.GetFileName(fullBackup)} wiederhergestellt.");
         }
         finally { _operationGate.Release(); }
     }
 
-    public Task DeleteBackupAsync(string backupPath, CancellationToken cancellationToken = default)
+    public async Task DeleteBackupAsync(string backupPath, CancellationToken cancellationToken = default)
     {
-        cancellationToken.ThrowIfCancellationRequested();
+        await _operationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
         var root = paths.Resolve("data", "backups", "databases");
         var full = Path.GetFullPath(backupPath);
+        OperationSafety.NoLinks(full);
         var relative = Path.GetRelativePath(root, full);
         if (Path.IsPathRooted(relative) || relative == ".." || relative.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
             || !Path.GetExtension(full).Equals(".sql", StringComparison.OrdinalIgnoreCase))
             throw new InvalidDataException("Ungültiger Datenbank-Backup-Pfad.");
+        var journal = full + ".operation.json";
+        OperationSafety.NoLinks(journal);
+        if (File.Exists(journal))
+        {
+            var state = System.Text.Json.JsonSerializer.Deserialize<DatabaseRecovery>(File.ReadAllText(journal));
+            if (state?.Phase is not ("completed" or "rolled-back")) throw new InvalidOperationException($"Unverändert abgebrochen: Rückfalldump wird für eine nicht abgeschlossene Operation benötigt: {journal}");
+        }
+        cancellationToken.ThrowIfCancellationRequested();
         if (File.Exists(full)) File.Delete(full);
-        return Task.CompletedTask;
+        }
+        finally { _operationGate.Release(); }
     }
 
     public async Task CreateDatabaseFromAsync(string sourceDatabase, string targetDatabase, DatabaseConnection? connection = null, CancellationToken cancellationToken = default)
+        => _ = await CreateDatabaseFromCoreAsync(sourceDatabase, targetDatabase, connection, cancellationToken, false).ConfigureAwait(false);
+
+    internal Task<DatabaseStorageIdentity?> CreateOwnedDatabaseFromAsync(string sourceDatabase, string targetDatabase, DatabaseConnection? connection, CancellationToken cancellationToken)
+        => CreateDatabaseFromCoreAsync(sourceDatabase, targetDatabase, connection, cancellationToken, true);
+
+    private async Task<DatabaseStorageIdentity?> CreateDatabaseFromCoreAsync(string sourceDatabase, string targetDatabase, DatabaseConnection? connection, CancellationToken cancellationToken, bool trackOwnership)
     {
         ValidateDatabaseName(sourceDatabase); ValidateDatabaseName(targetDatabase);
         if (sourceDatabase.Equals(targetDatabase, StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("Quell- und Zieldatenbank müssen verschieden sein.");
@@ -134,18 +217,45 @@ public sealed class DatabaseBackupService(IPortablePathService paths, JsonFileSt
         var collation = fields.Length >= 1 ? fields[^1] : null;
         ValidateSqlToken(charset); if (collation is not null) ValidateSqlToken(collation);
         var temp = paths.Resolve("app", "var", "tmp", $"staging-{Guid.NewGuid():N}.sql");
+        var identity = await GetInstanceIdentityAsync(server, cancellationToken).ConfigureAwait(false);
         await _operationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        var created = false;
+        var createAttempted = false;
+        var preserveDump = false;
+        var journal = temp + ".operation.json";
+        DatabaseStorageIdentity? databaseIdentity = null;
         try
         {
+            var existingNames = (await RunClientQueryAsync(server, "SHOW DATABASES;", cancellationToken).ConfigureAwait(false)).Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (existingNames.Contains(targetDatabase, StringComparer.OrdinalIgnoreCase)) throw new RecoveryOperationException(RecoveryOutcome.Unchanged, $"Unverändert abgebrochen: Datenbank {targetDatabase} existiert bereits.");
             await DumpToPathCoreAsync(server, sourceDatabase, temp, cancellationToken).ConfigureAwait(false);
-            var create = $"DROP DATABASE IF EXISTS {QuoteIdentifier(targetDatabase)}; CREATE DATABASE {QuoteIdentifier(targetDatabase)} CHARACTER SET {charset}"
+            OperationSafety.Persist(journal, new DatabaseRecovery(targetDatabase, identity, temp, "before-exclusive-create"));
+            var create = $"CREATE DATABASE {QuoteIdentifier(targetDatabase)} CHARACTER SET {charset}"
                 + (collation is null ? ";" : $" COLLATE {collation};");
-            await RunClientQueryAsync(server, create, cancellationToken).ConfigureAwait(false);
+            createAttempted = true;
+            await RunClientQueryAsync(server, create, CancellationToken.None).ConfigureAwait(false);
+            created = true;
+            OperationSafety.Persist(journal, new DatabaseRecovery(targetDatabase, identity, temp, "created-before-import"));
+            if (trackOwnership) databaseIdentity = await GetDatabaseStorageIdentityAsync(server, targetDatabase, CancellationToken.None).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
             await ImportFromPathCoreAsync(server, targetDatabase, temp, cancellationToken).ConfigureAwait(false);
+            OperationSafety.Persist(journal, new DatabaseRecovery(targetDatabase, identity, null, "completed"));
+            return databaseIdentity;
+        }
+        catch (Exception original)
+        {
+            if (created || createAttempted)
+            {
+                preserveDump = true;
+                OperationSafety.Persist(journal, new DatabaseRecovery(targetDatabase, identity, temp, "manual-recovery"));
+                throw new RecoveryOperationException(RecoveryOutcome.ManualRecoveryRequired, $"{original.Message}; Manuelle Wiederherstellung erforderlich: Zieldatenbank {targetDatabase} {(created ? "erzeugt" : "Erzeugungsresultat unklar")}, Server {identity}; Quell-Dump {temp}; Zustand {journal}. Keine Löschung allein anhand des Namens.", original);
+            }
+            OperationSafety.Persist(journal, new DatabaseRecovery(targetDatabase, identity, null, "rolled-back"));
+            throw;
         }
         finally
         {
-            TryDelete(temp);
+            if (!preserveDump) { TryDelete(temp); TryDelete(journal); }
             _operationGate.Release();
         }
     }
@@ -154,7 +264,9 @@ public sealed class DatabaseBackupService(IPortablePathService paths, JsonFileSt
     {
         ValidateDatabaseName(databaseName);
         var server = await GetActiveServerAsync(connection, cancellationToken).ConfigureAwait(false);
-        await RunClientQueryAsync(server, $"DROP DATABASE IF EXISTS {QuoteIdentifier(databaseName)};", cancellationToken).ConfigureAwait(false);
+        await _operationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try { await RunClientQueryAsync(server, $"DROP DATABASE IF EXISTS {QuoteIdentifier(databaseName)};", cancellationToken).ConfigureAwait(false); }
+        finally { _operationGate.Release(); }
     }
 
     public async Task DumpToPathAsync(DatabaseServerInfo server, string databaseName, string targetPath, CancellationToken cancellationToken)
@@ -164,7 +276,7 @@ public sealed class DatabaseBackupService(IPortablePathService paths, JsonFileSt
         finally { _operationGate.Release(); }
     }
 
-    public async Task ImportFromPathAsync(DatabaseServerInfo server, string databaseName, string sourcePath, CancellationToken cancellationToken)
+    internal async Task ImportFromPathAsync(DatabaseServerInfo server, string databaseName, string sourcePath, CancellationToken cancellationToken)
     {
         await _operationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try { await ImportFromPathCoreAsync(server, databaseName, sourcePath, cancellationToken).ConfigureAwait(false); }
@@ -174,15 +286,16 @@ public sealed class DatabaseBackupService(IPortablePathService paths, JsonFileSt
     private async Task DumpToPathCoreAsync(DatabaseServerInfo server, string databaseName, string targetPath, CancellationToken cancellationToken)
     {
         ValidateDatabaseName(databaseName);
+        OperationSafety.NoLinks(targetPath);
         Directory.CreateDirectory(Path.GetDirectoryName(targetPath)!);
-        var temporary = targetPath + ".partial";
+        var temporary = targetPath + ".partial-" + Guid.NewGuid().ToString("N");
         string? optionFile = null;
         try
         {
             optionFile = await CreateOptionFileAsync(server.Connection, cancellationToken).ConfigureAwait(false);
-            var arguments = ConnectionArguments(server.Connection, optionFile).Concat(["--single-transaction", "--routines", "--events", "--triggers", "--add-drop-table", "--default-character-set=utf8mb4", databaseName]);
+            var arguments = ConnectionArguments(server.Connection, optionFile).Concat(["--single-transaction", "--routines", "--events", "--triggers", "--add-drop-table", "--default-character-set=utf8mb4", "--", databaseName]);
             var info = CreateStartInfo(server.DumpPath, arguments);
-            await using (var destination = new FileStream(temporary, FileMode.Create, FileAccess.Write, FileShare.None, 81920, true))
+            await using (var destination = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None, 81920, true))
             {
                 using var process = Process.Start(info) ?? throw new InvalidOperationException("Dump-Werkzeug konnte nicht gestartet werden.");
                 var errorTask = process.StandardError.ReadToEndAsync(cancellationToken);
@@ -192,7 +305,7 @@ public sealed class DatabaseBackupService(IPortablePathService paths, JsonFileSt
                 if (process.ExitCode != 0) throw new InvalidOperationException($"Datenbank-Backup fehlgeschlagen: {error}");
                 await destination.FlushAsync(cancellationToken).ConfigureAwait(false);
             }
-            File.Move(temporary, targetPath, true);
+            File.Move(temporary, targetPath, false);
             logs.Write(server.DisplayName, $"Backup für {databaseName} erstellt: {Path.GetFileName(targetPath)}");
         }
         finally { TryDelete(temporary); TryDelete(optionFile); }
@@ -206,8 +319,9 @@ public sealed class DatabaseBackupService(IPortablePathService paths, JsonFileSt
         try
         {
             optionFile = await CreateOptionFileAsync(server.Connection, cancellationToken).ConfigureAwait(false);
-            var info = CreateStartInfo(server.ClientPath, ConnectionArguments(server.Connection, optionFile).Concat(["--default-character-set=utf8mb4", databaseName]));
+            var info = CreateStartInfo(server.ClientPath, ConnectionArguments(server.Connection, optionFile).Concat(["--default-character-set=utf8mb4", "--", databaseName]));
             using var process = Process.Start(info) ?? throw new InvalidOperationException("Datenbank-Client konnte nicht gestartet werden.");
+            using var registration = cancellationToken.Register(() => { try { if (!process.HasExited) { process.Kill(true); process.WaitForExit(); } } catch (InvalidOperationException) { } });
             var outputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
             var errorTask = process.StandardError.ReadToEndAsync(cancellationToken);
             await using (var source = new FileStream(sourcePath, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, true))
@@ -229,6 +343,7 @@ public sealed class DatabaseBackupService(IPortablePathService paths, JsonFileSt
             optionFile = await CreateOptionFileAsync(server.Connection, cancellationToken).ConfigureAwait(false);
             var info = CreateStartInfo(server.ClientPath, ConnectionArguments(server.Connection, optionFile).Concat(["--batch", "--skip-column-names", "--execute", sql]));
             using var process = Process.Start(info) ?? throw new InvalidOperationException("Datenbank-Client konnte nicht gestartet werden.");
+            using var registration = cancellationToken.Register(() => { try { if (!process.HasExited) { process.Kill(true); process.WaitForExit(); } } catch (InvalidOperationException) { } });
             var outputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
             var errorTask = process.StandardError.ReadToEndAsync(cancellationToken);
             await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
@@ -256,17 +371,23 @@ public sealed class DatabaseBackupService(IPortablePathService paths, JsonFileSt
     {
         if (string.IsNullOrEmpty(connection.Password)) return null;
         var path = paths.Resolve("app", "var", "tmp", $"db-client-{Guid.NewGuid():N}.ini");
+        OperationSafety.NoLinks(path);
+        var created = false;
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             var content = $"[client]{Environment.NewLine}password=\"{EscapeOptionValue(connection.Password)}\"{Environment.NewLine}";
-            await File.WriteAllTextAsync(path, content, new UTF8Encoding(false), cancellationToken).ConfigureAwait(false);
+            await using (var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, true))
+            {
+                created = true;
+                await stream.WriteAsync(new UTF8Encoding(false).GetBytes(content), cancellationToken).ConfigureAwait(false);
+            }
             File.SetAttributes(path, FileAttributes.Hidden | FileAttributes.Temporary);
             return path;
         }
         catch
         {
-            TryDelete(path);
+            if (created) TryDelete(path);
             throw;
         }
     }
@@ -274,6 +395,7 @@ public sealed class DatabaseBackupService(IPortablePathService paths, JsonFileSt
     private string ValidateSqlPath(string value)
     {
         var full = Path.GetFullPath(value);
+        OperationSafety.NoLinks(full);
         if (!File.Exists(full) || !Path.GetExtension(full).Equals(".sql", StringComparison.OrdinalIgnoreCase)) throw new FileNotFoundException("SQL-Backup nicht gefunden.", full);
         return full;
     }
@@ -281,11 +403,13 @@ public sealed class DatabaseBackupService(IPortablePathService paths, JsonFileSt
     private static string ParseDatabaseName(string fileName)
     {
         var stem = Path.GetFileNameWithoutExtension(fileName);
+        var timestamp = System.Text.RegularExpressions.Regex.Match(stem, @"^(.*)_\d{4}-\d{2}-\d{2}_\d{6}(?:_\d{3}|\.\d{3})?(?:-[a-f0-9]{8,32})?$", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (timestamp.Success) return timestamp.Groups[1].Value;
         var marker = stem.LastIndexOf('_');
         if (marker > 0) marker = stem.LastIndexOf('_', marker - 1);
         return marker > 0 ? stem[..marker] : stem;
     }
-    private static void ValidateDatabaseName(string value) { if (string.IsNullOrWhiteSpace(value) || value.Length > 64 || value.Any(ch => !(char.IsLetterOrDigit(ch) || ch is '_' or '-'))) throw new ArgumentException("Ungültiger Datenbankname.", nameof(value)); }
+    private static void ValidateDatabaseName(string value) { if (SystemDatabases.Contains(value) || string.IsNullOrWhiteSpace(value) || value.Length > 64 || value.Any(ch => !(char.IsLetterOrDigit(ch) || ch is '_' or '-'))) throw new ArgumentException("Ungültiger Datenbankname.", nameof(value)); }
     private static void ValidateSqlToken(string value) { if (value.Any(ch => !(char.IsLetterOrDigit(ch) || ch is '_'))) throw new InvalidDataException("Ungültiger Zeichensatz oder Kollationsname."); }
     private static string QuoteIdentifier(string value) => $"`{value.Replace("`", "``", StringComparison.Ordinal)}`";
     private static string EscapeLiteral(string value) => value.Replace("'", "''", StringComparison.Ordinal);

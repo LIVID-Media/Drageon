@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.1.1
+
+This release improves snapshot and staging reliability and usability.
+
+- Added validated, compact ZIP snapshots that preserve symbolic links and junctions with memory-efficient processing.
+- Improved restore safeguards and recovery for project files, databases, virtual hosts, and metadata.
+- Made staging cleanup safer with ownership checks and removal of resources created by the staging instance.
+- Added persistent progress, automatic list refresh, clearer localized dialogs, and shorter backup names.
+
 ## 1.1.0
 
 This release adds portable database backup, project snapshot, restore, and local staging workflows while keeping project discovery filesystem-based.

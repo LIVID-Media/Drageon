@@ -18,7 +18,7 @@ public partial class ProjectToolsWindow : System.Windows.Window
 
     private void AttachViewModel(ProjectToolsDialogViewModel? viewModel)
     {
-        if (_viewModel is not null) _viewModel.CloseRequested -= OnCloseRequested;
+        if (_viewModel is not null) { _viewModel.CloseRequested -= OnCloseRequested; _viewModel.Detach(); }
         _viewModel = viewModel;
         if (_viewModel is not null) _viewModel.CloseRequested += OnCloseRequested;
     }

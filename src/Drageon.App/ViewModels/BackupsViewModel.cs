@@ -81,9 +81,16 @@ public sealed class BackupsViewModel : ViewModelBase, IRefreshable
     private async Task RestoreAsync()
     {
         if (SelectedBackup is null || string.IsNullOrWhiteSpace(TargetDatabase)) return;
-        if (MessageBox.Show(TF("backups.confirm.restore", SelectedBackup.DatabaseName, TargetDatabase), T("backups.restore"), MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
-        try { Status = T("backups.status.restoring"); await _services.DatabaseBackups.RestoreAsync(SelectedBackup.Path, TargetDatabase); Status = T("backups.status.restored"); }
-        catch (Exception exception) { Fail(exception); }
+        try
+        {
+            var backup = SelectedBackup.Path;
+            var target = TargetDatabase;
+            var plan = await _services.DatabaseBackups.GetRestorePlanAsync(backup, target);
+            if (!ChoiceDialog.ConfirmOperationPlan(T("backups.restore"), plan)) return;
+            Status = T("backups.status.restoring");
+            await _services.DatabaseBackups.RestoreAsync(backup, target, confirmedPlan: plan.Fingerprint);
+            Status = T("backups.status.restored");
+        }        catch (Exception exception) { Fail(exception); }
     }
 
     private async Task DeleteBackupAsync()
@@ -117,7 +124,7 @@ public sealed class BackupsViewModel : ViewModelBase, IRefreshable
         catch (FormatException) { return value.ToString("g", culture); }
     }
 
-    private void Fail(Exception exception) { Status = exception.Message; _services.Logs.Write("Database", exception.Message, LogSeverity.Error); }
+    private void Fail(Exception exception) { Status = exception is RecoveryOperationException failure ? T($"operations.outcome.{failure.Outcome}") + ": " + exception.Message : exception.Message; _services.Logs.Write("Database", exception.Message, LogSeverity.Error); }
 }
 
 public sealed class SelectableDatabase(string name, Action selectionChanged) : ViewModelBase

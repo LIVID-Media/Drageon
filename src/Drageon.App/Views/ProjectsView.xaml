@@ -104,6 +104,16 @@
             </Grid>
         </Border>
 
-        <TextBlock Grid.Row="2" Text="{Binding Status}" Style="{StaticResource MutedText}" Margin="0,14,0,0" />
+        <TextBlock Grid.Row="2" Text="{Binding Status}" Margin="0,14,0,0">
+            <TextBlock.Style>
+                <Style TargetType="TextBlock" BasedOn="{StaticResource MutedText}">
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding OperationProgress.IsRunning}" Value="True">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </TextBlock.Style>
+        </TextBlock>
     </Grid>
 </UserControl>

@@ -29,16 +29,19 @@ public sealed class JsonFileStore
         return await JsonSerializer.DeserializeAsync<T>(stream, Options, cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task WriteAsync<T>(string path, T value, CancellationToken cancellationToken = default)
+    public async Task WriteAsync<T>(string path, T value, CancellationToken cancellationToken = default, bool overwrite = true)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+        OperationSafety.NoLinks(path);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        var temporaryPath = path + ".tmp";
+        var temporaryPath = path + ".tmp-" + Guid.NewGuid().ToString("N");
 
-        await using (var stream = File.Create(temporaryPath))
+        await using (var stream = new FileStream(temporaryPath, FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough))
         {
             await JsonSerializer.SerializeAsync(stream, value, Options, cancellationToken).ConfigureAwait(false);
+            stream.Flush(true);
         }
 
-        File.Move(temporaryPath, path, true);
+        File.Move(temporaryPath, path, overwrite);
     }
 }

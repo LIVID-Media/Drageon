@@ -92,7 +92,9 @@ public interface IDatabaseBackupService
     Task<IReadOnlyList<string>> GetDatabasesAsync(DatabaseConnection? connection = null, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<DatabaseBackupInfo>> GetBackupsAsync(CancellationToken cancellationToken = default);
     Task<IReadOnlyList<DatabaseBackupInfo>> BackupAsync(IEnumerable<string> databaseNames, DatabaseConnection? connection = null, IProgress<string>? progress = null, CancellationToken cancellationToken = default);
-    Task RestoreAsync(string backupPath, string targetDatabase, DatabaseConnection? connection = null, IProgress<string>? progress = null, CancellationToken cancellationToken = default);
+    Task<OperationPlan> GetRestorePlanAsync(string backupPath, string targetDatabase, DatabaseConnection? connection = null, CancellationToken cancellationToken = default);
+    Task RecoverDatabaseAsync(string journalPath, string expectedDatabase, DatabaseConnection? connection = null, CancellationToken cancellationToken = default);
+    Task RestoreAsync(string backupPath, string targetDatabase, DatabaseConnection? connection = null, IProgress<string>? progress = null, CancellationToken cancellationToken = default, string? confirmedPlan = null);
     Task DeleteBackupAsync(string backupPath, CancellationToken cancellationToken = default);
     Task CreateDatabaseFromAsync(string sourceDatabase, string targetDatabase, DatabaseConnection? connection = null, CancellationToken cancellationToken = default);
     Task DropDatabaseAsync(string databaseName, DatabaseConnection? connection = null, CancellationToken cancellationToken = default);
@@ -102,14 +104,19 @@ public interface IProjectSnapshotService
 {
     Task<IReadOnlyList<ProjectSnapshotInfo>> GetProjectSnapshotsAsync(string projectPath, CancellationToken cancellationToken = default);
     Task<ProjectSnapshotInfo> CreateProjectSnapshotAsync(string projectPath, string description, DatabaseConnection? connection = null, IProgress<string>? progress = null, CancellationToken cancellationToken = default);
-    Task RestoreProjectSnapshotAsync(string snapshotDirectory, bool backupCurrentState = true, DatabaseConnection? connection = null, IProgress<string>? progress = null, CancellationToken cancellationToken = default);
-    Task DeleteProjectSnapshotAsync(string snapshotDirectory, CancellationToken cancellationToken = default);
+    Task<OperationPlan> GetSnapshotPlanAsync(string snapshotDirectory, string expectedProjectPath, bool delete, CancellationToken cancellationToken = default);
+    Task RecoverFileExchangeAsync(string journalPath, string expectedProjectPath, CancellationToken cancellationToken = default);
+    Task RecoverProjectRestoreAsync(string journalPath, string expectedProjectPath, DatabaseConnection? connection = null, CancellationToken cancellationToken = default);
+    Task RestoreProjectSnapshotAsync(string snapshotDirectory, bool backupCurrentState = true, DatabaseConnection? connection = null, IProgress<string>? progress = null, CancellationToken cancellationToken = default, string? expectedProjectPath = null, string? confirmedPlan = null);
+    Task DeleteProjectSnapshotAsync(string snapshotDirectory, CancellationToken cancellationToken = default, string? expectedProjectPath = null, string? confirmedPlan = null);
 }
 
 public interface IStagingService
 {
     Task<StagingResult> CreateAsync(StagingRequest request, DatabaseConnection? connection = null, IProgress<string>? progress = null, CancellationToken cancellationToken = default);
-    Task DeleteAsync(string stagingProjectPath, bool deleteDatabase, DatabaseConnection? connection = null, CancellationToken cancellationToken = default);
+    Task<OperationPlan> GetDeletePlanAsync(string stagingProjectPath, bool deleteDatabase, DatabaseConnection? connection = null, CancellationToken cancellationToken = default);
+    Task RecoverDeletionAsync(string journalPath, string expectedProjectPath, CancellationToken cancellationToken = default);
+    Task DeleteAsync(string stagingProjectPath, bool deleteDatabase, DatabaseConnection? connection = null, CancellationToken cancellationToken = default, string? confirmedPlan = null);
 }
 
 public interface IAppLogService

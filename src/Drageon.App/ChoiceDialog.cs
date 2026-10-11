@@ -6,6 +6,18 @@ namespace Drageon.App;
 
 public static class ChoiceDialog
 {
+    public static bool ConfirmOperationPlan(string title, Drageon.Core.OperationPlan plan, bool? backupCurrentState = null)
+    {
+        var lines = new List<string> { $"{Localization.Get("operations.project")}: {plan.ProjectPath}" };
+        if (!string.IsNullOrWhiteSpace(plan.TargetDatabase)) lines.Add($"{Localization.Get("operations.database")}: {plan.TargetDatabase}");
+        if (plan.VirtualHosts.Count > 0) lines.Add($"{Localization.Get("operations.vhosts")}: {string.Join(", ", plan.VirtualHosts)}");
+        lines.Add($"{Localization.Get("operations.backup")}: {Localization.Get("operations.scope." + plan.BackupScope)}");
+        if (backupCurrentState is not null) lines.Add($"{Localization.Get("snapshots.backupCurrent")}: {Localization.Get(backupCurrentState.Value ? "common.yes" : "common.no")}");
+        if (plan.Snapshots.Count > 0) lines.Add($"{Localization.Get("operations.snapshots")}: {string.Join(", ", plan.Snapshots)}");
+        var text = string.Join(Environment.NewLine, lines);
+        return MessageBox.Show(text, title, MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes;
+    }
+
     public static string? ShowText(string title, string label, string initialValue = "")
     {
         var input = new TextBox { Text = initialValue, MinWidth = 400, Margin = new Thickness(0, 6, 0, 16) };

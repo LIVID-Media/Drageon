@@ -27,7 +27,7 @@ public sealed class PortablePathService : IPortablePathService
     {
         var path = segments.Aggregate(AppRoot, Path.Combine);
         var resolved = Path.GetFullPath(path);
-        if (!resolved.StartsWith(AppRoot, StringComparison.OrdinalIgnoreCase))
+        if (!OperationSafety.Contains(AppRoot, resolved))
         {
             throw new InvalidOperationException("Der Pfad liegt außerhalb des portablen App-Verzeichnisses.");
         }
@@ -43,4 +43,3 @@ public sealed class PortablePathService : IPortablePathService
         }
     }
 }
-

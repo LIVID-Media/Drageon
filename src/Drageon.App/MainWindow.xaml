@@ -88,7 +88,19 @@
         </Border>
 
         <Border Grid.Column="1" Background="{StaticResource WindowBackgroundBrush}">
-            <ContentControl Content="{Binding CurrentPage}" Margin="28,20" />
+            <Grid>
+                <Grid.RowDefinitions><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                <ContentControl Content="{Binding CurrentPage}" Margin="28,20" />
+                <Border Grid.Row="1" Margin="28,0,28,16" Padding="12" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
+                    <Border.Style>
+                        <Style TargetType="Border"><Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers><DataTrigger Binding="{Binding OperationProgress.IsRunning}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <StackPanel><TextBlock Text="{Binding OperationProgress.Text}" TextWrapping="Wrap" />
+                        <ProgressBar IsIndeterminate="True" Height="3" Margin="0,8,0,0" /></StackPanel>
+                </Border>
+            </Grid>
         </Border>
     </Grid>
 </Window>

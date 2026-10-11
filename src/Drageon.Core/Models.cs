@@ -160,6 +160,7 @@ public sealed record ProjectMetadata
     public string? Vhost { get; init; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? StagingOf { get; init; }
+    public string? StagingIdentity { get; init; }
 
     [JsonIgnore]
     public bool IsEmpty => string.IsNullOrWhiteSpace(Name) && !Favorite && string.IsNullOrWhiteSpace(Database) && string.IsNullOrWhiteSpace(Url)
@@ -186,9 +187,16 @@ public sealed record ProjectSnapshotInfo(
     bool IncludesVirtualHost = false,
     bool IncludesMetadata = true);
 
-public sealed record SnapshotFileEntry(string Path, string Kind, string? LinkTarget = null);
+public sealed record SnapshotFileEntry(string Path, string Kind, string? LinkTarget = null, long? Size = null, string? Sha256 = null, long? ModifiedUtcTicks = null);
 public sealed record ProjectSnapshotManifest
 {
+    public int FormatVersion { get; init; }
+    public string? ArchiveSha256 { get; init; }
+    public long? ArchiveSize { get; init; }
+    public string? IndexSha256 { get; init; }
+    public long? DatabaseSize { get; init; }
+    public string? DatabaseSha256 { get; init; }
+    public string? DatabaseServerIdentity { get; init; }
     public required ProjectSnapshotInfo Snapshot { get; init; }
     public required IReadOnlyList<SnapshotFileEntry> Entries { get; init; }
     public ProjectMetadata? Metadata { get; init; }
@@ -205,6 +213,12 @@ public sealed record StagingRequest(
     bool CreateVirtualHost);
 
 public sealed record StagingResult(string ProjectPath, string? DatabaseName, string Url);
+public sealed record OperationPlan(string ProjectPath, string? Server, string? TargetDatabase, IReadOnlyList<string> VirtualHosts, string BackupScope, IReadOnlyList<string> Snapshots, string Fingerprint);
+public enum RecoveryOutcome { Unchanged, RolledBack, Completed, ManualRecoveryRequired }
+public sealed class RecoveryOperationException(RecoveryOutcome outcome, string message, Exception? innerException = null) : IOException(message, innerException)
+{
+    public RecoveryOutcome Outcome { get; } = outcome;
+}
 
 public sealed record PhpSettings
 {

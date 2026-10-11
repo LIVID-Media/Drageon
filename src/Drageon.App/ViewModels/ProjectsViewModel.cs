@@ -29,6 +29,7 @@ public sealed class ProjectsViewModel : ViewModelBase, IRefreshable
     }
 
     public ObservableCollection<ProjectItemViewModel> Projects { get; } = [];
+    internal event EventHandler? Refreshed;
     public AsyncRelayCommand RefreshCommand { get; }
     public AsyncRelayCommand ToggleFavoriteCommand { get; }
     public RelayCommand OpenProjectCommand { get; }
@@ -41,6 +42,7 @@ public sealed class ProjectsViewModel : ViewModelBase, IRefreshable
     public AsyncRelayCommand CreateStagingCommand { get; }
     public Visibility EmptyVisibility => Projects.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
     public string Status { get => _status; private set => Set(ref _status, value); }
+    public OperationProgressViewModel OperationProgress => _services.OperationProgress;
 
     public async Task RefreshAsync()
     {
@@ -88,6 +90,7 @@ public sealed class ProjectsViewModel : ViewModelBase, IRefreshable
             }
             Raise(nameof(EmptyVisibility));
             Status = TF("projects.status.found", Projects.Count);
+            Refreshed?.Invoke(this, EventArgs.Empty);
         }
         catch (Exception exception)
         {
@@ -177,10 +180,11 @@ public sealed class ProjectsViewModel : ViewModelBase, IRefreshable
         if (description is null) return;
         try
         {
-            Status = T("snapshots.status.creating");
             var connection = project.DatabaseName is null ? null : await EnsureDatabaseConnectionAsync();
             if (project.DatabaseName is not null && connection is null) return;
-            await _services.ProjectSnapshots.CreateProjectSnapshotAsync(project.RelativePath, description, connection, new Progress<string>(step => Status = T($"snapshots.step.{step}")));
+            using var operation = _services.OperationProgress.Begin(T("snapshots.status.creating"));
+            Status = T("snapshots.status.creating");
+            await _services.ProjectSnapshots.CreateProjectSnapshotAsync(project.RelativePath, description, connection, new Progress<string>(step => { var status = FormatProgress("snapshots", step); if (operation.Report(status)) Status = status; }));
             await RefreshAsync(); Status = T("snapshots.status.created");
         }
         catch (Exception exception) { Fail(exception); }
@@ -197,19 +201,22 @@ public sealed class ProjectsViewModel : ViewModelBase, IRefreshable
             if (choice is null || choice.Value.Value is null) return;
             if (choice.Value.Action == SnapshotManageAction.Delete)
             {
-                if (MessageBox.Show(T("snapshots.confirm.delete"), T("action.delete"), MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
-                await _services.ProjectSnapshots.DeleteProjectSnapshotAsync(choice.Value.Value);
+                var deletePlan = await _services.ProjectSnapshots.GetSnapshotPlanAsync(choice.Value.Value, project.RelativePath, true);
+                if (!ChoiceDialog.ConfirmOperationPlan(T("action.delete"), deletePlan)) return;
+                using var deletion = _services.OperationProgress.Begin(T("snapshots.delete"));
+                await _services.ProjectSnapshots.DeleteProjectSnapshotAsync(choice.Value.Value, expectedProjectPath: project.RelativePath, confirmedPlan: deletePlan.Fingerprint);
                 await RefreshAsync(); Status = T("snapshots.status.deleted");
                 return;
             }
-            if (MessageBox.Show(TF("snapshots.confirm.restoreProject", project.Name), T("snapshots.restore"), MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
+            var restorePlan = await _services.ProjectSnapshots.GetSnapshotPlanAsync(choice.Value.Value, project.RelativePath, false);
+            if (!ChoiceDialog.ConfirmOperationPlan(T("snapshots.restore"), restorePlan, choice.Value.BackupCurrent)) return;
             var selectedSnapshot = snapshots.First(item => item.DirectoryPath.Equals(choice.Value.Value, StringComparison.OrdinalIgnoreCase));
             var connection = selectedSnapshot.DatabaseName is null ? null : await EnsureDatabaseConnectionAsync();
             if (selectedSnapshot.DatabaseName is not null && connection is null) return;
-            await _services.ProjectSnapshots.RestoreProjectSnapshotAsync(choice.Value.Value, choice.Value.BackupCurrent, connection, new Progress<string>(step => Status = T($"snapshots.step.{step}")));
-            await ReloadWebServerAsync();
-            Status = T("snapshots.status.restored");
+            using var operation = _services.OperationProgress.Begin(T("snapshots.restore"));
+            await _services.ProjectSnapshots.RestoreProjectSnapshotAsync(choice.Value.Value, choice.Value.BackupCurrent, connection, new Progress<string>(step => { var status = FormatProgress("snapshots", step); if (operation.Report(status)) Status = status; }), expectedProjectPath: project.RelativePath, confirmedPlan: restorePlan.Fingerprint);
             await RefreshAsync();
+            Status = T("snapshots.status.restored");
         }
         catch (Exception exception) { Fail(exception); }
     }
@@ -233,7 +240,8 @@ public sealed class ProjectsViewModel : ViewModelBase, IRefreshable
         try
         {
             var connection = copy ? await EnsureDatabaseConnectionAsync() : null; if (copy && connection is null) return;
-            var result = await _services.Staging.CreateAsync(new(project.RelativePath, name, path, url, database, copy, createVhost), connection, new Progress<string>(step => Status = T($"staging.step.{step}")));
+            using var operation = _services.OperationProgress.Begin(T("staging.create"));
+            var result = await _services.Staging.CreateAsync(new(project.RelativePath, name, path, url, database, copy, createVhost), connection, new Progress<string>(step => { var status = FormatProgress("staging", step); if (operation.Report(status)) Status = status; }));
             await ReloadWebServerAsync();
             var message = result.DatabaseName is null
                 ? TF("staging.successWithoutDatabase", result.Url)
@@ -271,17 +279,36 @@ public sealed class ProjectsViewModel : ViewModelBase, IRefreshable
 
     internal async Task<bool> DeleteStagingAsync(ProjectItemViewModel project)
     {
-        if (MessageBox.Show(TF("staging.confirm.delete", project.Name, project.DatabaseName ?? T("projects.database.none")), T("staging.delete"), MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return false;
+
         try
         {
-            var connection = project.DatabaseName is null ? null : await EnsureDatabaseConnectionAsync(); if (project.DatabaseName is not null && connection is null) return false;
-            await _services.Staging.DeleteAsync(project.RelativePath, project.DatabaseName is not null, connection); await ReloadWebServerAsync(); await RefreshAsync();
+            var plan = await _services.Staging.GetDeletePlanAsync(project.RelativePath, true);
+            if (!ChoiceDialog.ConfirmOperationPlan(T("staging.delete"), plan)) return false;
+            using var operation = _services.OperationProgress.Begin(T("staging.delete"));
+            await _services.Staging.DeleteAsync(project.RelativePath, true, confirmedPlan: plan.Fingerprint);
+            await ReloadWebServerAsync(); await RefreshAsync();
             return true;
         }
-        catch (Exception exception) { Fail(exception); return false; }
+        catch (Exception exception)
+        {
+            if (exception is RecoveryOperationException { Outcome: RecoveryOutcome.Completed })
+            {
+                await RefreshAsync();
+                Fail(exception);
+                return true;
+            }
+            Fail(exception);
+            return false;
+        }
     }
 
-    private void Fail(Exception exception) { Status = exception.Message; _services.Logs.Write("Projects", exception.Message, LogSeverity.Error); }
+    private static string FormatProgress(string prefix, string step)
+    {
+        var parts = step.Split(':', 2);
+        return parts.Length == 2 ? TF("operations.progress.files", parts[1]) : T($"{prefix}.step.{step}");
+    }
+
+    private void Fail(Exception exception) { Status = exception is RecoveryOperationException failure ? T($"operations.outcome.{failure.Outcome}") + ": " + exception.Message : exception.Message; _services.Logs.Write("Projects", exception.Message, LogSeverity.Error); }
 
     private async Task<DatabaseConnection?> EnsureDatabaseConnectionAsync()
     {
@@ -300,6 +327,17 @@ public sealed class ProjectsViewModel : ViewModelBase, IRefreshable
     }
 
     private async Task ReloadWebServerAsync()
+    {
+        try { await ReloadWebServerCoreAsync(); }
+        catch (Exception exception)
+        {
+            var message = TF("operations.restartFailed", exception.Message);
+            _services.Logs.Write("Webserver", message, LogSeverity.Warning);
+            MessageBox.Show(message, T("app.title"), MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
+    private async Task ReloadWebServerCoreAsync()
     {
         var active = _services.Settings.Current.WebServer;
         var generator = _services.Generators.FirstOrDefault(item => item.ComponentId.Equals(active, StringComparison.OrdinalIgnoreCase));
@@ -372,20 +410,38 @@ public sealed class ProjectItemViewModel(LocalProject project, int snapshotCount
 
 public sealed class ProjectToolsDialogViewModel : ViewModelBase
 {
+    private ProjectItemViewModel _project;
+    private bool _closeRequested;
     private string _projectName;
     private string _nameStatus = "";
 
     public ProjectToolsDialogViewModel(ProjectsViewModel owner, ProjectItemViewModel project)
     {
         Owner = owner;
-        Project = project;
+        _project = project;
+        Owner.Refreshed += OnProjectsRefreshed;
         _projectName = project.Name;
         SaveProjectNameCommand = new AsyncRelayCommand(_ => SaveProjectNameAsync(), _ => CanSaveName);
         DeleteStagingCommand = new AsyncRelayCommand(_ => DeleteStagingAsync(), _ => Project.IsStaging);
     }
 
     public ProjectsViewModel Owner { get; }
-    public ProjectItemViewModel Project { get; }
+    public ProjectItemViewModel Project { get => _project; private set => Set(ref _project, value); }
+    internal void Detach() => Owner.Refreshed -= OnProjectsRefreshed;
+    private void OnProjectsRefreshed(object? sender, EventArgs eventArgs)
+    {
+        var updated = Owner.Projects.FirstOrDefault(item => item.RelativePath.Equals(Project.RelativePath, StringComparison.OrdinalIgnoreCase));
+        if (updated is null) { RequestClose(); return; }
+        Project = updated;
+        SaveProjectNameCommand.RaiseCanExecuteChanged();
+        DeleteStagingCommand.RaiseCanExecuteChanged();
+    }
+    private void RequestClose()
+    {
+        if (_closeRequested) return;
+        _closeRequested = true;
+        CloseRequested?.Invoke(this, EventArgs.Empty);
+    }
     public AsyncRelayCommand SaveProjectNameCommand { get; }
     public AsyncRelayCommand DeleteStagingCommand { get; }
     public event EventHandler? CloseRequested;
@@ -421,6 +477,6 @@ public sealed class ProjectToolsDialogViewModel : ViewModelBase
 
     private async Task DeleteStagingAsync()
     {
-        if (await Owner.DeleteStagingAsync(Project)) CloseRequested?.Invoke(this, EventArgs.Empty);
+        if (await Owner.DeleteStagingAsync(Project)) RequestClose();
     }
 }

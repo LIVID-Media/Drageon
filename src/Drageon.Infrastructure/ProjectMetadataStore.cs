@@ -8,6 +8,33 @@ public sealed class ProjectMetadataStore(IPortablePathService paths, JsonFileSto
     private readonly string _path = paths.Resolve("app", "config", "projects.json");
     private static readonly SemaphoreSlim Gate = new(1, 1);
 
+    public async Task SetAsync(string projectPath, ProjectMetadata metadata, CancellationToken cancellationToken = default)
+    {
+        await OperationSafety.Gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try { await SetWithinOperationAsync(projectPath, metadata, cancellationToken).ConfigureAwait(false); }
+        finally { OperationSafety.Gate.Release(); }
+    }
+
+    public async Task UpdateAsync(string projectPath, Func<ProjectMetadata, ProjectMetadata> update, CancellationToken cancellationToken = default)
+    {
+        await OperationSafety.Gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try { await UpdateWithinOperationAsync(projectPath, update, cancellationToken).ConfigureAwait(false); }
+        finally { OperationSafety.Gate.Release(); }
+    }
+
+    public async Task RemoveAsync(string projectPath, CancellationToken cancellationToken = default)
+    {
+        await OperationSafety.Gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try { await RemoveWithinOperationAsync(projectPath, cancellationToken).ConfigureAwait(false); }
+        finally { OperationSafety.Gate.Release(); }
+    }
+
+    public async Task AssignVirtualHostAsync(string? oldProjectPath, string? newProjectPath, string oldHost, string newHost, CancellationToken cancellationToken = default)
+    {
+        await OperationSafety.Gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try { await AssignVirtualHostWithinOperationAsync(oldProjectPath, newProjectPath, oldHost, newHost, cancellationToken).ConfigureAwait(false); }
+        finally { OperationSafety.Gate.Release(); }
+    }
     public async Task<IReadOnlyDictionary<string, ProjectMetadata>> ReadAndPruneAsync(CancellationToken cancellationToken = default)
     {
         await Gate.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -18,7 +45,6 @@ public sealed class ProjectMetadataStore(IPortablePathService paths, JsonFileSto
             foreach (var key in metadata.Keys.ToArray())
             {
                 if (!TryNormalizeProjectPath(key, out var normalized)
-                    || !Directory.Exists(ToAbsolutePath(normalized!))
                     || metadata[key].IsEmpty)
                 {
                     metadata.Remove(key);
@@ -45,7 +71,7 @@ public sealed class ProjectMetadataStore(IPortablePathService paths, JsonFileSto
         return all.GetValueOrDefault(normalized);
     }
 
-    public async Task SetAsync(string projectPath, ProjectMetadata metadata, CancellationToken cancellationToken = default)
+    internal async Task SetWithinOperationAsync(string projectPath, ProjectMetadata metadata, CancellationToken cancellationToken = default)
     {
         var normalized = NormalizeExistingProjectPath(projectPath);
         await Gate.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -59,7 +85,7 @@ public sealed class ProjectMetadataStore(IPortablePathService paths, JsonFileSto
         finally { Gate.Release(); }
     }
 
-    public async Task UpdateAsync(string projectPath, Func<ProjectMetadata, ProjectMetadata> update, CancellationToken cancellationToken = default)
+    internal async Task UpdateWithinOperationAsync(string projectPath, Func<ProjectMetadata, ProjectMetadata> update, CancellationToken cancellationToken = default)
     {
         var normalized = NormalizeExistingProjectPath(projectPath);
         await Gate.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -73,7 +99,7 @@ public sealed class ProjectMetadataStore(IPortablePathService paths, JsonFileSto
         finally { Gate.Release(); }
     }
 
-    public async Task RemoveAsync(string projectPath, CancellationToken cancellationToken = default)
+    internal async Task RemoveWithinOperationAsync(string projectPath, CancellationToken cancellationToken = default)
     {
         var normalized = NormalizeProjectPath(projectPath);
         await Gate.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -85,7 +111,7 @@ public sealed class ProjectMetadataStore(IPortablePathService paths, JsonFileSto
         finally { Gate.Release(); }
     }
 
-    public async Task AssignVirtualHostAsync(string? oldProjectPath, string? newProjectPath, string oldHost, string newHost, CancellationToken cancellationToken = default)
+    internal async Task AssignVirtualHostWithinOperationAsync(string? oldProjectPath, string? newProjectPath, string oldHost, string newHost, CancellationToken cancellationToken = default)
     {
         await Gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
@@ -112,14 +138,18 @@ public sealed class ProjectMetadataStore(IPortablePathService paths, JsonFileSto
 
     private async Task<Dictionary<string, ProjectMetadata>> ReadCoreAsync(CancellationToken cancellationToken)
     {
+        OperationSafety.NoLinks(_path);
         var value = await store.ReadAsync<Dictionary<string, ProjectMetadata>>(_path, cancellationToken).ConfigureAwait(false);
         return value is null ? new(StringComparer.OrdinalIgnoreCase) : new(value, StringComparer.OrdinalIgnoreCase);
     }
 
     private static ProjectMetadata NormalizeMetadata(ProjectMetadata value) => value with
     {
-        Name = NullIfWhiteSpace(value.Name), Database = NullIfWhiteSpace(value.Database), Url = NullIfWhiteSpace(value.Url),
-        Vhost = NullIfWhiteSpace(value.Vhost), StagingOf = NullIfWhiteSpace(value.StagingOf)?.Replace('\\', '/')
+        Name = NullIfWhiteSpace(value.Name),
+        Database = NullIfWhiteSpace(value.Database),
+        Url = NullIfWhiteSpace(value.Url),
+        Vhost = NullIfWhiteSpace(value.Vhost),
+        StagingOf = NullIfWhiteSpace(value.StagingOf)?.Replace('\\', '/')
     };
 
     private string NormalizeExistingProjectPath(string value)
@@ -144,6 +174,8 @@ public sealed class ProjectMetadataStore(IPortablePathService paths, JsonFileSto
         var relative = Path.GetRelativePath(www, candidate);
         if (Path.IsPathRooted(relative) || relative is "." or ".." || relative.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal) || relative.Contains(Path.DirectorySeparatorChar)) return false;
         normalized = $"www/{relative.Replace('\\', '/')}";
+        OperationSafety.Relative(normalized);
+        OperationSafety.NoLinks(candidate);
         return true;
     }
 

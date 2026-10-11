@@ -3,8 +3,11 @@ using Drageon.Core;
 using Drageon.Infrastructure;
 
 if (IsFakeTool()) return await RunFakeToolAsync();
+if (args.FirstOrDefault() == "--live-file-exchange") return await LiveFileExchangeProbe.RunAsync(args);
 
 var root = Path.GetFullPath(args.FirstOrDefault() ?? Path.Combine("work", "backup-smoke-root"));
+var allowedRoot = Path.GetFullPath(Path.Combine(Environment.CurrentDirectory, "work")) + Path.DirectorySeparatorChar;
+if (!root.StartsWith(allowedRoot, StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("Test root must be a child of workspace/work.");
 if (Directory.Exists(root)) DeleteTree(root);
 var paths = new PortablePathService(root); paths.EnsureDirectoryLayout();
 var store = new JsonFileStore(); var logs = new AppLogService(paths); var settings = new SettingsService(paths, store); await settings.LoadAsync();
@@ -30,7 +33,7 @@ async Task ConfigureFakeServer(string component)
     await store.WriteAsync(VersionedComponentConfiguration.GetSettingsPath(paths, component, version), component == "mysql" ? (object)new MySqlSettings() : new MariaDbSettings());
 }
 
-void Seed(string name, string sql) { var dir = paths.Resolve("fake-state"); Directory.CreateDirectory(dir); File.WriteAllText(Path.Combine(dir, name + ".sql"), sql); }
+void Seed(string name, string sql) { var dir = paths.Resolve("fake-state"); Directory.CreateDirectory(dir); Directory.CreateDirectory(Path.Combine(dir, name)); File.WriteAllText(Path.Combine(dir, name + ".sql"), sql); }
 string State(string name) => File.ReadAllText(paths.Resolve("fake-state", name + ".sql"));
 
 foreach (var component in new[] { "mysql", "mariadb" })
@@ -46,6 +49,8 @@ foreach (var component in new[] { "mysql", "mariadb" })
     Check((await databases.GetActiveServerAsync()).Connection.Password == "test-secret", component + " encrypted component credentials loaded");
     var listed = await databases.GetDatabasesAsync(); Check(listed.SequenceEqual(new[] { "maxspar" }), component + " lists only user databases");
     var backup = (await databases.BackupAsync(["maxspar"])).Single(); Seed("maxspar", "-- changed");
+    Check(Regex.IsMatch(Path.GetFileName(backup.Path), @"^maxspar_\d{4}-\d{2}-\d{2}_\d{6}_\d{3}\.sql$")
+        && (await databases.GetBackupsAsync()).Any(item => item.Path == backup.Path && item.DatabaseName == "maxspar"), component + " short backup name retains seconds and database association");
     await databases.RestoreAsync(backup.Path, "maxspar"); Check(State("maxspar").Contains(component + " original"), component + " backup and restore");
     await databases.DeleteBackupAsync(backup.Path); Check(!File.Exists(backup.Path), component + " backup deletion");
     Check(!Directory.EnumerateFiles(paths.Resolve("app", "var", "tmp"), "db-client-*.ini").Any(), component + " temporary credential files removed");
@@ -55,9 +60,7 @@ await ConfigureFakeServer("mysql"); Seed("contao5", "-- project database");
 var projectRoot = paths.Resolve("www", "contao5"); Directory.CreateDirectory(projectRoot); Directory.CreateDirectory(Path.Combine(projectRoot, "empty")); Directory.CreateDirectory(Path.Combine(projectRoot, "files"));
 await File.WriteAllTextAsync(Path.Combine(projectRoot, "index.php"), "original"); await File.WriteAllTextAsync(Path.Combine(projectRoot, ".env"), "hidden-value");
 var link = Path.Combine(projectRoot, "public-files");
-var junctionInfo = new System.Diagnostics.ProcessStartInfo("cmd.exe") { UseShellExecute = false, CreateNoWindow = true };
-foreach (var argument in new[] { "/d", "/c", "mklink", "/J", link, Path.Combine(projectRoot, "files") }) junctionInfo.ArgumentList.Add(argument);
-using (var junction = System.Diagnostics.Process.Start(junctionInfo)!) { await junction.WaitForExitAsync(); if (junction.ExitCode != 0) throw new Exception("Test junction could not be created."); }
+SafeFileTree.CreateJunction(link, Path.Combine(projectRoot, "files"));
 await projects.SetMetadataAsync("www/contao5", new ProjectMetadata { Favorite = true, Database = "contao5", Url = "http://contao5.localhost" });
 await projects.SetNameAsync("www/contao5", "Contao Local");
 Check((await projects.GetProjectsAsync()).Single(item => item.RelativePath == "www/contao5").Name == "Contao Local"
@@ -65,8 +68,11 @@ Check((await projects.GetProjectsAsync()).Single(item => item.RelativePath == "w
 var snapshot = await snapshots.CreateProjectSnapshotAsync("www/contao5", "before update");
 Check(snapshot.DirectoryPath.Replace('\\', '/').Contains("data/snapshots/contao5/", StringComparison.Ordinal)
     && File.Exists(Path.Combine(paths.Resolve(snapshot.DirectoryPath.Split('/')), "snapshot.json")), "project snapshot stored directly and completed in place");
+Seed("contao5", "-- live changed database");
 await File.WriteAllTextAsync(Path.Combine(projectRoot, "index.php"), "changed"); Directory.Delete(link); Directory.Delete(Path.Combine(projectRoot, "empty"));
-await snapshots.RestoreProjectSnapshotAsync(snapshot.DirectoryPath, backupCurrentState: false);
+await snapshots.RestoreProjectSnapshotAsync(snapshot.DirectoryPath, backupCurrentState: true);
+Check(State("contao5").Contains("project database"), "combined snapshot restores database");
+Check((await snapshots.GetProjectSnapshotsAsync("www/contao5")).Count == 2, "combined snapshot creates optional current-state snapshot");
 Check(await File.ReadAllTextAsync(Path.Combine(projectRoot, "index.php")) == "original", "project file restore");
 Check(await File.ReadAllTextAsync(Path.Combine(projectRoot, ".env")) == "hidden-value", "dotfile restore");
 Check(Directory.Exists(Path.Combine(projectRoot, "empty")), "empty directory restore");
@@ -84,21 +90,40 @@ var stagingVhost = await store.ReadAsync<VirtualHostDefinition>(paths.Resolve("a
 Check(stagingVhost?.DocumentRoot == "www/contao5-staging", "staging vhost document root has no dot segment");
 var stagingSnapshot = await snapshots.CreateProjectSnapshotAsync(stagingResult.ProjectPath, "staging state");
 Check(Directory.Exists(paths.Resolve(stagingSnapshot.DirectoryPath.Split('/'))), "staging snapshot created");
-await staging.DeleteAsync(stagingResult.ProjectPath, true); Check(!Directory.Exists(paths.Resolve("www", "contao5-staging")), "staging deleted");
+await snapshots.RestoreProjectSnapshotAsync(stagingSnapshot.DirectoryPath, false);
+var stageRestoreJournal = Directory.EnumerateDirectories(paths.Resolve("data", "recovery"), "restore-*")
+    .Select(directory => Path.Combine(directory, "restore.operation.json"))
+    .Where(File.Exists).Single(file => System.Text.Json.JsonSerializer.Deserialize<ProjectRestoreState>(File.ReadAllText(file))?.Project == stagingResult.ProjectPath);
+var stageRestoreState = System.Text.Json.JsonSerializer.Deserialize<ProjectRestoreState>(File.ReadAllText(stageRestoreJournal))!;
+Check(stagingLink.ResolveLinkTarget(false)?.FullName.Equals(paths.Resolve("www", "contao5-staging", "files"), StringComparison.OrdinalIgnoreCase) == true, "ZIP staging snapshot restores internal junction");
+Check(!Directory.EnumerateFileSystemEntries(paths.Resolve("www")).Any(path => Path.GetFileName(path).StartsWith("contao5-staging.", StringComparison.Ordinal)), "successful restore leaves no staging operation artifacts in www");
+using (var archive = System.IO.Compression.ZipFile.OpenRead(paths.Resolve(stagingSnapshot.DirectoryPath.Split('/').Append("files.zip").ToArray())))
+{
+    var entry = archive.GetEntry("public-files")!;
+    using var reader = new StreamReader(entry.Open());
+    Check(reader.ReadToEnd() == "files" && (entry.ExternalAttributes & unchecked((int)0xF0000000)) == unchecked((int)0xA0000000), "ZIP explicitly contains internal junction target as link, without dereferencing it");
+}
+await staging.DeleteAsync(stagingResult.ProjectPath, true);
+Check(!File.Exists(paths.Resolve("fake-state", "contao5_staging.sql")) && State("contao5").Contains("project database"), "owned staging database deleted and main database preserved");
+Check(!Directory.Exists(paths.Resolve("www", "contao5-staging")), "staging deleted with owned database");
 Check(!Directory.Exists(paths.Resolve("data", "snapshots", "contao5-staging")), "staging deletion removes snapshots");
-await snapshots.DeleteProjectSnapshotAsync(snapshot.DirectoryPath); Check(!Directory.Exists(paths.Resolve("data", "snapshots", "contao5")), "last project snapshot removes project directory");
+Check(!Directory.Exists(stageRestoreState.Recovery) && !File.Exists(stageRestoreJournal), "staging deletion removes its completed combined restore artifacts");
+foreach (var item in await snapshots.GetProjectSnapshotsAsync("www/contao5")) await snapshots.DeleteProjectSnapshotAsync(item.DirectoryPath); Check(!Directory.Exists(paths.Resolve("data", "snapshots", "contao5")), "last project snapshot removes project directory");
 
 Directory.CreateDirectory(paths.Resolve("www", "broken-snapshot")); await projects.SetMetadataAsync("www/broken-snapshot", new ProjectMetadata { Database = "missing_database" });
 try { await snapshots.CreateProjectSnapshotAsync("www/broken-snapshot", "expected failure"); } catch (InvalidOperationException) { }
 Check(!Directory.Exists(paths.Resolve("data", "snapshots", "broken-snapshot")), "failed project snapshot removes incomplete and empty parent");
 
 var orphan = paths.Resolve("www", "orphan"); Directory.CreateDirectory(orphan); await projects.SetMetadataAsync("www/orphan", new ProjectMetadata { Favorite = true }); Directory.Delete(orphan);
-_ = await projects.GetProjectsAsync(); var metadataText = await File.ReadAllTextAsync(paths.Resolve("app", "config", "projects.json")); Check(!metadataText.Contains("www/orphan"), "orphan metadata pruned on project scan");
+_ = await projects.GetProjectsAsync(); var metadataText = await File.ReadAllTextAsync(paths.Resolve("app", "config", "projects.json")); Check(metadataText.Contains("www/orphan"), "missing project metadata retained for interrupted operations");
 Directory.CreateDirectory(paths.Resolve("www", "vhost-a")); Directory.CreateDirectory(paths.Resolve("www", "vhost-b")); var metadataStore = new ProjectMetadataStore(paths, store);
 await metadataStore.AssignVirtualHostAsync(null, "www/vhost-a", "a.localhost", "a.localhost");
 await metadataStore.AssignVirtualHostAsync("www/vhost-a", "www/vhost-b", "a.localhost", "b.localhost");
 Check((await projects.GetMetadataAsync("www/vhost-a")) is null && (await projects.GetMetadataAsync("www/vhost-b"))?.Vhost == "b.localhost", "vhost rename and project reassignment metadata");
 await metadataStore.AssignVirtualHostAsync("www/vhost-b", null, "b.localhost", "b.localhost"); Check((await projects.GetMetadataAsync("www/vhost-b")) is null, "vhost deletion removes empty metadata entry");
+await WindowsSafetyRegression.RunAsync(paths, store, projects, databases, snapshots, staging, logs, Check);
+await RestoreExchangeRegression.RunAsync(paths, store, projects, databases, snapshots, staging, logs, Check);
+await CombinedSnapshotRegression.RunAsync(paths, store, projects, snapshots, Check);
 Console.WriteLine($"PASS: {checks} backup/snapshot/staging checks");
 return 0;
 
@@ -118,10 +143,13 @@ async Task<int> RunFakeToolAsync()
 {
     var exe = Path.GetFileName(Environment.ProcessPath!).ToLowerInvariant(); var directory = new DirectoryInfo(Path.GetDirectoryName(Environment.ProcessPath!)!);
     for (var i = 0; i < 4; i++) directory = directory.Parent!;
-    var state = Path.Combine(directory.FullName, "fake-state"); Directory.CreateDirectory(state);
+    var state = Path.Combine(directory.FullName, "fake-state"); Directory.CreateDirectory(state); Directory.CreateDirectory(Path.Combine(state, "mysql"));
     if (exe.Contains("dump"))
     {
-        var database = args.Last(item => !item.StartsWith('-')); var file = Path.Combine(state, database + ".sql");
+        if (File.Exists(Path.Combine(state, "fail-dump"))) { Console.Error.Write("Injected dump failure"); return 3; }
+        var database = args.Last();
+        if (database.StartsWith('-') && !args[..^1].Contains("--")) return 4;
+        var file = Path.Combine(state, database + ".sql");
         if (!File.Exists(file)) return 2; Console.Write(await File.ReadAllTextAsync(file)); return 0;
     }
     var executeIndex = Array.FindIndex(args, item => item == "--execute");
@@ -130,9 +158,29 @@ async Task<int> RunFakeToolAsync()
         var sql = args[executeIndex + 1];
         if (sql.Contains("SHOW DATABASES", StringComparison.OrdinalIgnoreCase)) { Console.WriteLine("information_schema"); Console.WriteLine("mysql"); foreach (var file in Directory.EnumerateFiles(state, "*.sql")) Console.WriteLine(Path.GetFileNameWithoutExtension(file)); return 0; }
         if (sql.Contains("DEFAULT_CHARACTER_SET_NAME", StringComparison.OrdinalIgnoreCase)) { Console.WriteLine("utf8mb4\tutf8mb4_unicode_ci"); return 0; }
-        foreach (Match match in Regex.Matches(sql, @"DROP DATABASE IF EXISTS `([^`]+)`", RegexOptions.IgnoreCase)) File.Delete(Path.Combine(state, match.Groups[1].Value + ".sql"));
-        foreach (Match match in Regex.Matches(sql, @"CREATE DATABASE `([^`]+)`", RegexOptions.IgnoreCase)) File.WriteAllText(Path.Combine(state, match.Groups[1].Value + ".sql"), "");
+        if (sql.Contains("@@hostname", StringComparison.OrdinalIgnoreCase)) { Console.WriteLine($"fake-host\t{state}\t{args.FirstOrDefault(item => item.StartsWith("--port="))}\t1\tfake-version"); return 0; }
+        if (sql.Contains("@@server_uuid", StringComparison.OrdinalIgnoreCase)) { Console.WriteLine("fake-uuid-" + state); return 0; }
+        if (sql.Contains("@@datadir", StringComparison.OrdinalIgnoreCase)) { Console.WriteLine(state); return 0; }
+        foreach (Match match in Regex.Matches(sql, @"DROP DATABASE (?:IF EXISTS )?`([^`]+)`", RegexOptions.IgnoreCase))
+        {
+            File.Delete(Path.Combine(state, match.Groups[1].Value + ".sql"));
+            var schema = Path.Combine(state, match.Groups[1].Value);
+            if (Directory.Exists(schema)) Directory.Delete(schema);
+        }
+        foreach (Match match in Regex.Matches(sql, @"CREATE DATABASE `([^`]+)`", RegexOptions.IgnoreCase))
+        {
+            var path = Path.Combine(state, match.Groups[1].Value + ".sql");
+            if (File.Exists(path)) { Console.Error.Write("Database exists"); return 2; }
+            File.WriteAllText(path, "");
+            Directory.CreateDirectory(Path.Combine(state, match.Groups[1].Value));
+        }
         return 0;
     }
-    var target = args.Last(item => !item.StartsWith('-')); await File.WriteAllTextAsync(Path.Combine(state, target + ".sql"), await Console.In.ReadToEndAsync()); return 0;
+    var target = args.Last();
+    if (target.StartsWith('-') && !args[..^1].Contains("--")) return 4;
+    var input = await Console.In.ReadToEndAsync();
+    await File.WriteAllTextAsync(Path.Combine(state, target + ".sql"), input);
+    if (input.Contains("SLOW_IMPORT")) { File.WriteAllText(Path.Combine(state, "import-started"), ""); await Task.Delay(30000); }
+    if (input.Contains("FAIL_IMPORT") || File.Exists(Path.Combine(state, "fail-all-imports"))) { Console.Error.Write("Injected import error"); return 3; }
+    return 0;
 }

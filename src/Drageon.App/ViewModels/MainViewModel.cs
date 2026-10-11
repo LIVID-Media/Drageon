@@ -33,6 +33,8 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         ExitCommand = new AsyncRelayCommand(_ => ExitAsync());
     }
 
+    public OperationProgressViewModel OperationProgress => _services.OperationProgress;
+
     public ObservableCollection<NavigationItem> Navigation { get; }
     public RelayCommand NavigateCommand { get; }
     public RelayCommand OpenAboutCommand { get; }

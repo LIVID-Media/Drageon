@@ -125,11 +125,8 @@ public sealed class VHostsViewModel : ViewModelBase, IRefreshable
         var path = Path.Combine(DirectoryPath, CreateFileName(host.Host));
         if (File.Exists(path) && !path.Equals(oldPath, StringComparison.OrdinalIgnoreCase))
             throw new InvalidDataException(TF("vhosts.error.hostExists", host.Host));
-        await _services.Store.WriteAsync(path, host);
-        if (oldPath is not null && !oldPath.Equals(path, StringComparison.OrdinalIgnoreCase) && File.Exists(oldPath))
-            File.Delete(oldPath);
+        path = await new VirtualHostStore(_services.Paths, _services.Store).SaveAsync(host, oldPath, _loadedProjectPath, SelectedProjectPath, _loadedHostName);
         _selectedHost = new(host.Host, path, host.Enabled);
-        await new ProjectMetadataStore(_services.Paths, _services.Store).AssignVirtualHostAsync(_loadedProjectPath, SelectedProjectPath, _loadedHostName ?? host.Host, host.Host);
         _loadedProjectPath = SelectedProjectPath;
         _loadedHostName = host.Host;
         return Path.GetFileName(path);
@@ -139,8 +136,8 @@ public sealed class VHostsViewModel : ViewModelBase, IRefreshable
     {
         if (SelectedHost is null) return;
         if (System.Windows.MessageBox.Show(TF("vhosts.confirm.delete", SelectedHost.HostName), T("vhosts.deleteTitle"), System.Windows.MessageBoxButton.YesNo, System.Windows.MessageBoxImage.Warning) != System.Windows.MessageBoxResult.Yes) return;
-        var fileName = Path.GetFileName(SelectedHost.Path); File.Delete(SelectedHost.Path);
-        await new ProjectMetadataStore(_services.Paths, _services.Store).AssignVirtualHostAsync(_loadedProjectPath, null, SelectedHost.HostName, SelectedHost.HostName);
+        var fileName = Path.GetFileName(SelectedHost.Path);
+        await new VirtualHostStore(_services.Paths, _services.Store).DeleteAsync(SelectedHost.Path, SelectedHost.HostName, _loadedProjectPath);
         await GenerateAllAsync(); await RefreshAsync(); Status = TF("vhosts.status.deleted", fileName);
     }
 

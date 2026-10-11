@@ -615,4 +615,7 @@ public sealed record AppServices(
     IReadOnlyList<IConfigGenerator> Generators,
     IAppLogService Logs,
     ICronScheduler Cron,
-    ISmtpCatcher Mail);
+    ISmtpCatcher Mail)
+{
+    public ViewModels.OperationProgressViewModel OperationProgress { get; } = new();
+}
