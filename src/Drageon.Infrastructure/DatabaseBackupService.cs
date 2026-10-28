@@ -121,7 +121,8 @@ public sealed partial class DatabaseBackupService(IPortablePathService paths, Js
             var existing = (await RunClientQueryAsync(server, "SHOW DATABASES;", cancellationToken).ConfigureAwait(false))
                 .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                 .Contains(targetDatabase, StringComparer.OrdinalIgnoreCase);
-            var recovery = paths.Resolve("data", "backups", "databases", $"{targetDatabase}_recovery_{Guid.NewGuid():N}.sql");
+            var timestamp = DateTime.Now.ToString("yyyy-MM-dd_HHmmss_fff", CultureInfo.InvariantCulture);
+            var recovery = paths.Resolve("data", "backups", "databases", $"{targetDatabase}_{timestamp}-recovery.sql");
             var identity = await GetInstanceIdentityAsync(server, cancellationToken).ConfigureAwait(false);
             var charset = "utf8mb4"; string? collation = null;
             if (existing)
@@ -168,6 +169,17 @@ public sealed partial class DatabaseBackupService(IPortablePathService paths, Js
                     throw new RecoveryOperationException(RecoveryOutcome.ManualRecoveryRequired, $"Manuelle Wiederherstellung erforderlich: {recovery}; {journal}. {original.Message}; Kompensation: {compensation.Message}", original);
                 }
                 throw new RecoveryOperationException(mutated ? RecoveryOutcome.RolledBack : RecoveryOutcome.Unchanged, $"{(mutated ? "Erfolgreich zurückgerollt" : "Unverändert abgebrochen")}: {original.Message}. Sicherung: {recovery}", original);
+            }
+            // Only clean up after the completed state is durable. Failed restores retain their
+            // input and journal for recovery; a cleanup error must not trigger compensation.
+            try
+            {
+                File.Delete(input);
+                File.Delete(journal);
+            }
+            catch (Exception cleanup) when (cleanup is IOException or UnauthorizedAccessException)
+            {
+                logs.Write("Database", $"Wiederherstellung abgeschlossen; temporäre Dateien konnten nicht vollständig entfernt werden: {input}; {journal}. {cleanup.Message}");
             }
             logs.Write("Database", $"{targetDatabase} aus {Path.GetFileName(fullBackup)} wiederhergestellt.");
         }
@@ -403,7 +415,7 @@ public sealed partial class DatabaseBackupService(IPortablePathService paths, Js
     private static string ParseDatabaseName(string fileName)
     {
         var stem = Path.GetFileNameWithoutExtension(fileName);
-        var timestamp = System.Text.RegularExpressions.Regex.Match(stem, @"^(.*)_\d{4}-\d{2}-\d{2}_\d{6}(?:_\d{3}|\.\d{3})?(?:-[a-f0-9]{8,32})?$", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        var timestamp = System.Text.RegularExpressions.Regex.Match(stem, @"^(.*)_\d{4}-\d{2}-\d{2}_\d{6}(?:_\d{3}|\.\d{3})?(?:-(?:[a-f0-9]{8,32}|recovery))?$", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
         if (timestamp.Success) return timestamp.Groups[1].Value;
         var marker = stem.LastIndexOf('_');
         if (marker > 0) marker = stem.LastIndexOf('_', marker - 1);

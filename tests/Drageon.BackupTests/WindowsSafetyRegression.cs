@@ -466,7 +466,7 @@ internal static class WindowsSafetyRegression
         await staging.DeleteAsync(cancelledDbStage.ProjectPath, true);
         await projects.SetDatabaseAsync("www/safe-files", null);
 
-        foreach (var stamp in new[] { "2026-10-10_120428", "2026-10-10_120428-7a2619ee", "2026-10-10_120428.560-7a2619ee" })
+        foreach (var stamp in new[] { "2026-10-10_120428", "2026-10-10_120428-7a2619ee", "2026-10-10_120428.560-7a2619ee", "2026-10-28_100506_123-recovery", "recovery_4956ad5bc987441c80e4203ec2ffb750" })
         {
             var legacySqlPath = paths.Resolve("data", "backups", "databases", "legacy_db_" + stamp + ".sql"); File.WriteAllText(legacySqlPath, "legacy");
             check((await databases.GetBackupsAsync()).Any(item => item.Path == legacySqlPath && item.DatabaseName == "legacy_db"), "legacy backup naming retains database association: " + stamp);
@@ -479,7 +479,9 @@ internal static class WindowsSafetyRegression
         File.WriteAllText(sql, "FAIL_IMPORT");
         var dbFailure = await Fails(() => databases.RestoreAsync(sql, "restore-target"), "database import failure returns failure status");
         check(dbFailure.Message.Contains("zurückgerollt") && File.ReadAllText(dbState).Contains("target old"), "database import failure restores actual target independently of project folder");
-        check(Directory.EnumerateFiles(paths.Resolve("data", "backups", "databases"), "restore-target_recovery_*.sql").Any(path => File.ReadAllText(path).Contains("target old")), "actual target recovery SQL retained");
+        check(Directory.EnumerateFiles(paths.Resolve("data", "backups", "databases"), "restore-target_*-recovery.sql").Any(path => File.ReadAllText(path).Contains("target old")), "actual target recovery SQL retained");
+        var rolledBackJournal = Directory.EnumerateFiles(paths.Resolve("data", "backups", "databases"), "restore-target_*-recovery.sql.operation.json").Single();
+        check(File.ReadAllText(rolledBackJournal).Contains("rolled-back") && File.ReadAllText(rolledBackJournal[..^".operation.json".Length] + ".input.sql") == "FAIL_IMPORT", "failed import retains input and rolled-back journal");
         File.WriteAllText(paths.Resolve("fake-state", "fail-all-imports"), "");
         try
         {
@@ -487,13 +489,21 @@ internal static class WindowsSafetyRegression
             check(dbFailure.Message.Contains("Manuelle") && dbFailure.Message.Contains(".sql"), "manual database recovery reports dump and journal paths");
         }
         finally { File.Delete(paths.Resolve("fake-state", "fail-all-imports")); }
-        var pendingDatabaseJournal = Directory.EnumerateFiles(paths.Resolve("data", "backups", "databases"), "restore-target_recovery_*.sql.operation.json")
+        var pendingDatabaseJournal = Directory.EnumerateFiles(paths.Resolve("data", "backups", "databases"), "restore-target_*-recovery.sql.operation.json")
             .Single(path => File.ReadAllText(path).Contains("before-replace"));
         var pendingDump = pendingDatabaseJournal[..^".operation.json".Length];
+        check(File.Exists(pendingDump + ".input.sql"), "failed compensation retains import copy and journal for recovery");
         await Fails(() => databases.DeleteBackupAsync(pendingDump), "unfinished database recovery dump cannot be deleted");
         check(File.Exists(pendingDump), "required recovery SQL remains available after attempted delete");
         await databases.RecoverDatabaseAsync(pendingDatabaseJournal, "restore-target");
         check(File.ReadAllText(dbState).Contains("target old"), "durable database journal can recover after failed compensation");
+        var legacyRecoveryDump = paths.Resolve("data", "backups", "databases", $"restore-target_recovery_{Guid.NewGuid():N}.sql");
+        File.Copy(pendingDump, legacyRecoveryDump);
+        var legacyRecoveryState = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(pendingDatabaseJournal))!;
+        legacyRecoveryState["Backup"] = legacyRecoveryDump;
+        File.WriteAllText(legacyRecoveryDump + ".operation.json", legacyRecoveryState.ToJsonString());
+        await databases.RecoverDatabaseAsync(legacyRecoveryDump + ".operation.json", "restore-target");
+        check(File.ReadAllText(dbState).Contains("target old"), "legacy hash-named database journal remains recoverable");
         File.WriteAllText(dbState, "-- target old");
         File.WriteAllText(sql, "SLOW_IMPORT");
         using (var cancellation = new CancellationTokenSource())
@@ -541,5 +551,9 @@ internal static class WindowsSafetyRegression
         File.WriteAllText(sql, "-- restored dash database");
         await databases.RestoreAsync(sql, "-named");
         check(File.ReadAllText(paths.Resolve("fake-state", "-named.sql")) == "-- restored dash database", "database names beginning with dash cannot become client options");
+        var beforeNewRestore = Directory.GetFiles(paths.Resolve("data", "backups", "databases")).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        await databases.RestoreAsync(sql, "new-restore-target");
+        check(File.ReadAllText(paths.Resolve("fake-state", "new-restore-target.sql")) == "-- restored dash database"
+            && beforeNewRestore.SetEquals(Directory.GetFiles(paths.Resolve("data", "backups", "databases"))), "restore to absent database leaves no import copy or journal and creates no empty recovery backup");
     }
 }

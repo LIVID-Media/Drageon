@@ -1,7 +1,7 @@
 {
   "id": "nginx",
   "displayName": "Nginx Webserver",
-  "description": "Optionaler Webserver mit PHP über FastCGI.",
+  "description": "Optionaler Webserver mit PHP \u00FCber FastCGI.",
   "category": "webserver",
   "bundled": true,
   "exclusiveGroup": "server",

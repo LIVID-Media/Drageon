@@ -89,6 +89,7 @@ public sealed class BackupsViewModel : ViewModelBase, IRefreshable
             if (!ChoiceDialog.ConfirmOperationPlan(T("backups.restore"), plan)) return;
             Status = T("backups.status.restoring");
             await _services.DatabaseBackups.RestoreAsync(backup, target, confirmedPlan: plan.Fingerprint);
+            await RefreshAsync();
             Status = T("backups.status.restored");
         }        catch (Exception exception) { Fail(exception); }
     }

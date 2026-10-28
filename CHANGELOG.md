@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.1.2
+
+This release fixes a database recovery issue and updates some default packages.
+
+- Simplified database recovery backup names and cleaned up temporary files after successful restores.
+- Automatically refresh the backup list after restoration.
+- Updated default Apache, cURL, Node.js, and PHP packages, including PHP 8.5.12 and 8.4.27 with fixes for the [PHP2Shell vulnerabilities](https://www.php.net/index.php#2026-10-21-1).
+
 ## 1.1.1
 
 This release improves snapshot and staging reliability and usability.

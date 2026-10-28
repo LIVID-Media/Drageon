@@ -4,6 +4,7 @@
   "description": "Ruft URLs f\u00FCr Cronjobs, Tests und Diagnose auf.",
   "category": "developmentTool",
   "bundled": true,
+  "exclusiveGroup": null,
   "downloadPageUrl": "https://curl.se/windows/",
   "installDirectory": "curl",
   "addToPath": true,
@@ -12,9 +13,9 @@
   ],
   "releases": [
     {
-      "version": "8.22.0",
-      "url": "https://curl.se/windows/dl-8.22.0_1/curl-8.22.0_1-win64-mingw.zip",
-      "sha256": "7f23b039f6ea4197362d4468e1a0e71428201222e1bef3b680d5ef7b2aefb714",
+      "version": "8.23.0",
+      "url": "https://curl.se/windows/dl-8.23.0_5/curl-8.23.0_5-win64-mingw.zip",
+      "sha256": "b0af3896433242213f6d1388a104115e6dfdd3b16727e5b00c2ab0f48fbc904a",
       "archiveType": "zip",
       "fileName": null,
       "stripPrefix": null,

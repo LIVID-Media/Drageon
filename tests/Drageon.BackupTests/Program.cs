@@ -51,7 +51,14 @@ foreach (var component in new[] { "mysql", "mariadb" })
     var backup = (await databases.BackupAsync(["maxspar"])).Single(); Seed("maxspar", "-- changed");
     Check(Regex.IsMatch(Path.GetFileName(backup.Path), @"^maxspar_\d{4}-\d{2}-\d{2}_\d{6}_\d{3}\.sql$")
         && (await databases.GetBackupsAsync()).Any(item => item.Path == backup.Path && item.DatabaseName == "maxspar"), component + " short backup name retains seconds and database association");
+    var backupDirectory = paths.Resolve("data", "backups", "databases");
+    var beforeRestore = Directory.GetFiles(backupDirectory).ToHashSet(StringComparer.OrdinalIgnoreCase);
     await databases.RestoreAsync(backup.Path, "maxspar"); Check(State("maxspar").Contains(component + " original"), component + " backup and restore");
+    var restoreArtifacts = Directory.GetFiles(backupDirectory).Where(path => !beforeRestore.Contains(path)).ToArray();
+    Check(restoreArtifacts.Length == 1 && Regex.IsMatch(Path.GetFileName(restoreArtifacts[0]), @"^maxspar_\d{4}-\d{2}-\d{2}_\d{6}_\d{3}-recovery\.sql$")
+        && File.ReadAllText(restoreArtifacts[0]) == "-- changed", component + " successful restore retains only timestamped recovery backup of previous database");
+    Check((await databases.GetBackupsAsync()).Any(item => item.Path == restoreArtifacts[0] && item.DatabaseName == "maxspar"), component + " recovery backup retains database association");
+    await databases.DeleteBackupAsync(restoreArtifacts[0]);
     await databases.DeleteBackupAsync(backup.Path); Check(!File.Exists(backup.Path), component + " backup deletion");
     Check(!Directory.EnumerateFiles(paths.Resolve("app", "var", "tmp"), "db-client-*.ini").Any(), component + " temporary credential files removed");
 }

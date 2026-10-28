@@ -175,7 +175,9 @@ public sealed partial class DatabaseBackupService
         var journal = Path.GetFullPath(journalPath);
         OperationSafety.NoLinks(journal);
         var root = paths.Resolve("data", "backups", "databases");
-        if (Path.GetDirectoryName(journal) != root || !Path.GetFileName(journal).StartsWith(expectedDatabase + "_recovery_", StringComparison.Ordinal) || !journal.EndsWith(".sql.operation.json", StringComparison.Ordinal)) throw new InvalidDataException("Ungültiges Datenbank-Journal.");
+        var journalNamePattern = "^" + System.Text.RegularExpressions.Regex.Escape(expectedDatabase)
+            + @"(?:_recovery_[a-fA-F0-9]{32}|_\d{4}-\d{2}-\d{2}_\d{6}_\d{3}-recovery)\.sql\.operation\.json$";
+        if (Path.GetDirectoryName(journal) != root || !System.Text.RegularExpressions.Regex.IsMatch(Path.GetFileName(journal), journalNamePattern)) throw new InvalidDataException("Ungültiges Datenbank-Journal.");
         var state = System.Text.Json.JsonSerializer.Deserialize<DatabaseRecovery>(File.ReadAllText(journal)) ?? throw new InvalidDataException("Operationszustand fehlt.");
         var backup = journal[..^".operation.json".Length];
         if (state.Database != expectedDatabase || state.Backup != backup) throw new InvalidDataException("Rückfalldump gehört nicht zur erwarteten Datenbank.");

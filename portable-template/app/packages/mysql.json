@@ -11,8 +11,8 @@
   "pathDirectories": [],
   "releases": [
     {
-      "version": "8.4.11",
-      "url": "https://cdn.mysql.com/Downloads/MySQL-8.4/mysql-8.4.11-winx64.zip",
+      "version": "8.4.13",
+      "url": "https://cdn.mysql.com/Downloads/MySQL-8.4/mysql-8.4.13-winx64.zip",
       "sha256": null,
       "archiveType": "zip",
       "fileName": null,
